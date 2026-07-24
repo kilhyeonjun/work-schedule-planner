@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Any
 
 from .explain import explain_day, explain_result
@@ -29,10 +30,19 @@ def _allocate(payload: dict[str, Any]) -> tuple[Any, dict[str, int]]:
         ]
         if not eligible:
             break
-        selected = min(
-            eligible,
-            key=lambda day: (day.recognized_minutes + allocated[day.date], day.date),
-        )
+        if month.policy.allocation_mode == "capacity_weighted":
+            selected = min(
+                eligible,
+                key=lambda day: (
+                    Fraction(day.recognized_minutes + allocated[day.date], daily_caps[day.date]),
+                    day.date,
+                ),
+            )
+        else:
+            selected = min(
+                eligible,
+                key=lambda day: (day.recognized_minutes + allocated[day.date], day.date),
+            )
         allocated[selected.date] += 1
         weekly_work[selected.week_key] = weekly_work.get(selected.week_key, 0) + 1
         remaining -= 1

@@ -1,0 +1,129 @@
+/* Today tab — Terminal Ledger (tokens from index.css only) */
+
+.today-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; align-items: start; }
+.today-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+/* shared card header/body */
+.today-card-h { display: flex; align-items: baseline; gap: 8px; padding: 12px 16px 0; }
+.today-card-h__t { font-size: 13px; font-weight: 600; color: var(--ink); }
+.today-card-h__sum { margin-left: auto; font-size: 12px; color: var(--mut); }
+.today-card-h__sum b { color: var(--ink); font-weight: 600; }
+.today-card-b { padding: 12px 16px 14px; }
+
+/* ---------- hero ---------- */
+.today-hero { overflow: hidden; }
+.today-hero__main { padding: 18px 20px 18px; }
+.today-hero__meta { flex-wrap: wrap; }
+.today-hero__date { font-size: 12px; color: var(--ink); }
+.today-hero__win { font-size: 12px; }
+.today-hero__k {
+  margin-top: 14px; font-family: var(--font-mono); font-size: 11px; color: var(--mut);
+  letter-spacing: .08em; text-transform: uppercase;
+}
+.today-hero__big { font-size: 64px; font-weight: 600; line-height: 1.05; letter-spacing: -.02em; margin-top: 4px; }
+.today-hero__title { font-size: 13px; font-weight: 600; margin-top: 10px; }
+.today-hero__msg { font-size: 12.5px; margin-top: 3px; }
+.today-hero__tiles {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  border-top: 1px solid var(--line);
+}
+.today-tile { padding: 14px 16px 12px; display: flex; flex-direction: column; min-width: 0; }
+.today-tile + .today-tile { border-left: 1px solid var(--line); }
+.today-tile__k {
+  font-family: var(--font-mono); font-size: 11px; color: var(--mut);
+  letter-spacing: .08em; text-transform: uppercase;
+}
+.today-tile__big { font-size: 28px; font-weight: 600; letter-spacing: -.01em; margin-top: 8px; }
+.today-tile__big.is-ok { color: var(--green); }
+.today-tile__note { font-size: 11.5px; color: var(--mut); margin-top: auto; padding-top: 8px; }
+.today-tile__note b { font-family: var(--font-mono); font-weight: 500; color: var(--ink); }
+.today-badge-ok {
+  display: inline-flex; align-items: center; margin-left: 8px; vertical-align: 4px;
+  font-size: 10.5px; padding: 2px 7px; border-radius: 6px; color: var(--green);
+  border: 1px solid rgba(62, 207, 142, .35); background: rgba(62, 207, 142, .08);
+}
+
+/* 수집값 vs 현재 추정 */
+.today-src { display: flex; flex-direction: column; gap: 6px; margin-top: 9px; }
+.today-src__row { display: flex; align-items: baseline; gap: 8px; }
+.today-src__lab {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--mut); white-space: nowrap;
+}
+.today-src__lab::before { content: ""; width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.today-src__row--official .today-src__lab::before { background: var(--green); }
+.today-src__row--est .today-src__lab::before { background: transparent; border: 1.5px solid var(--indigo); }
+.today-src__at { font-size: 11px; color: var(--mut); }
+.today-src__v { margin-left: auto; font-size: 18px; font-weight: 600; }
+.today-src__row--official .today-src__v { color: var(--ink); }
+.today-src__row--est .today-src__v { color: var(--indigo); border-bottom: 1px dashed var(--mut); }
+
+/* ---------- rest-day variant ---------- */
+.today-rest { padding: 22px 20px; }
+.today-rest__k { font-size: 16px; font-weight: 650; color: var(--ink); }
+.today-rest__date { font-size: 12px; color: var(--mut); margin-top: 6px; }
+.today-rest__next { font-size: 12.5px; margin-top: 12px; flex-wrap: wrap; }
+.today-rest__next b { color: var(--ink); font-weight: 600; }
+.today-rest__big { font-size: 40px; font-weight: 600; line-height: 1.05; letter-spacing: -.02em; margin-top: 6px; color: var(--ink); }
+
+/* ---------- partial timeoff ---------- */
+.today-timeoff { display: flex; align-items: center; gap: 10px; padding: 12px 16px; font-size: 12.5px; flex-wrap: wrap; }
+.today-timeoff__dot { background: var(--timeoff); }
+.today-timeoff__t { font-weight: 600; color: var(--ink); }
+.today-timeoff b { color: var(--ink); }
+
+/* ---------- today ledger ---------- */
+.today-ledger__stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.today-ledger__k { font-size: 11px; color: var(--mut); }
+.today-ledger__v { font-size: 15px; font-weight: 600; color: var(--ink); margin-top: 2px; }
+.today-ledger__ints {
+  margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 5px; font-size: 12px;
+}
+.today-ledger__int { color: var(--ink); }
+
+/* ---------- freshness row ---------- */
+.today-fresh { display: flex; align-items: center; gap: 10px; padding: 12px 16px; font-size: 12px; flex-wrap: wrap; }
+.today-fresh__t { font-weight: 600; color: var(--ink); }
+.today-fresh__b { color: var(--ink); font-weight: 600; }
+.today-fresh__pv { margin-left: auto; color: var(--mut); }
+
+/* ---------- month snapshot ---------- */
+.today-month__bar {
+  position: relative; height: 14px; border-radius: 6px;
+  background: var(--surface); border: 1px solid var(--line); overflow: hidden;
+}
+.today-month__fill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: rgba(62, 207, 142, .35); box-shadow: inset -2px 0 0 var(--green);
+}
+.today-month__stats {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--line);
+}
+.today-month__k { font-size: 11px; color: var(--mut); }
+.today-month__v { font-size: 15px; font-weight: 600; color: var(--ink); margin-top: 2px; }
+.today-month__v.is-acc { color: var(--green); }
+
+/* ---------- notifications ---------- */
+.today-notif__item { padding: 9px 0; border-top: 1px solid var(--line); }
+.today-notif__item:first-child { border-top: 0; padding-top: 0; }
+.today-notif__t { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.today-notif__at { font-size: 11px; color: var(--mut); flex: none; }
+.today-notif__x { font-size: 12px; margin-top: 2px; }
+
+/* ---------- skeleton ---------- */
+.today-skel-hero { height: 240px; }
+.today-skel-card { height: 150px; }
+.today-skel-row { height: 46px; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 900px) {
+  .today-grid { grid-template-columns: 1fr; }
+  .today-hero__big { font-size: 56px; }
+}
+@media (max-width: 640px) {
+  .today-hero__tiles { grid-template-columns: 1fr; }
+  .today-tile + .today-tile { border-left: 0; border-top: 1px solid var(--line); }
+  .today-ledger__stats { grid-template-columns: repeat(3, 1fr); row-gap: 10px; }
+}

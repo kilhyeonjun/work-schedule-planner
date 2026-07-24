@@ -39,6 +39,7 @@ class Policy:
     weekly_limit_minutes: int
     normal_minutes: int
     max_minutes: int
+    allocation_mode: str
     date_overrides: dict[str, int]
     weekday_caps: dict[int, int]
 
@@ -72,6 +73,7 @@ def parse_work_month(payload: dict[str, Any]) -> WorkMonth:
         weekly_limit_minutes=_integer(raw_policy.get("weeklyLimitMinutes"), "weeklyLimitMinutes"),
         normal_minutes=_integer(raw_policy.get("normalMinutes"), "normalMinutes"),
         max_minutes=_integer(raw_policy.get("maxMinutes"), "maxMinutes"),
+        allocation_mode=str(raw_policy.get("allocationMode") or "equal"),
         date_overrides={
             str(key): _integer(value, f"dateOverrides.{key}")
             for key, value in dict(raw_policy.get("dateOverrides") or {}).items()

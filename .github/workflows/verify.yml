@@ -12,12 +12,34 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
         with:
           python-version: '3.11'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/flex-work-schedule/package-lock.json
       - run: uv sync --extra dev --frozen
       - run: uvx ruff==0.16.0 check .
       - run: uv run pytest -q
       - run: uv run python scripts/generate_scenarios.py --check
+      - run: npm ci
+        working-directory: web/flex-work-schedule
+      - run: npm run build
+        working-directory: web/flex-work-schedule
       - run: uv run python scripts/scan_public_boundary.py
+      - run: npx playwright install --with-deps chromium
+        working-directory: web/flex-work-schedule
+      - run: npm run test:e2e
+        working-directory: web/flex-work-schedule
+      - run: uvx pip-audit==2.10.1 --skip-editable
+      - run: >-
+          uvx --from cyclonedx-bom==7.3.1 cyclonedx-py environment
+          .venv/bin/python --pyproject pyproject.toml --output-reproducible
+          --output-file sbom.cdx.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sbom
+          path: sbom.cdx.json

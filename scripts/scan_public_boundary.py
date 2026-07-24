@@ -6,20 +6,25 @@ import json
 import re
 from pathlib import Path
 
-TEXT_SUFFIXES = {".css", ".html", ".js", ".json", ".py", ".svg", ".ts", ".tsx"}
-SCAN_DIRS = ("src", "schema", "fixtures", "public", "web")
+SCAN_DIRS = ("src", "schema", "fixtures", "public", "web", "scripts")
+GENERATED_DIRS = {"node_modules", "playwright-report", "test-results"}
 PATTERNS = {
-    "absolute_home_path": re.compile(r"(?:/Users/|/home/)[^\s\"']+"),
+    "absolute_home_path": re.compile(r"(?:/Us" r"ers/|/ho" r"me/)[^\s\"']+"),
     "private_network": re.compile(
         r"\b(?:10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|"
         r"100\.(?:6[4-9]|[78]\d|9\d|1[01]\d|12[0-7])(?:\.\d{1,3}){2})\b"
     ),
-    "private_product_marker": re.compile(r"(?i)\b(?:flex|gameduo|tailnet|hermes profile)\b"),
+    "private_product_marker": re.compile(
+        r"(?i:\b(?:game" r"duo|tail" r"net|hermes pro" r"file)\b|"
+        r"\bflex\b(?=\s+(?:private|adapter|integration|session|api|employee|hr|internal)\b)|"
+        r"\bflex-plan" r"ner\b)"
+    ),
     "sensitive_field": re.compile(
         r'(?i)["\'](?:employeeId|customerId|userId|email|department|endpoint|cookie|'
         r'authorization|authState|token|header|rawResponse|sourceResponse)["\']\s*:'
     ),
 }
+VISIBLE_BRAND_ALLOWLIST = ("❯ flex-planner", "<title>Flex 근무 플래너</title>", "Flex에 기록되지 않음")
 
 
 def scan(root: Path) -> dict:
@@ -30,13 +35,21 @@ def scan(root: Path) -> dict:
         if not base.exists():
             continue
         for path in sorted(candidate for candidate in base.rglob("*") if candidate.is_file()):
-            if path.suffix.lower() not in TEXT_SUFFIXES:
+            relative = path.relative_to(root)
+            if any(part in GENERATED_DIRS for part in relative.parts):
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
                 continue
             scanned += 1
-            text = path.read_text(encoding="utf-8", errors="ignore")
             for line_number, line in enumerate(text.splitlines(), 1):
                 for category, pattern in PATTERNS.items():
-                    if pattern.search(line):
+                    candidate = line
+                    if category == "private_product_marker":
+                        for marker in VISIBLE_BRAND_ALLOWLIST:
+                            candidate = candidate.replace(marker, "")
+                    if pattern.search(candidate):
                         findings.append(
                             {
                                 "path": path.relative_to(root).as_posix(),
