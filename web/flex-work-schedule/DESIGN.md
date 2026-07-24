@@ -78,7 +78,7 @@ Controls use 8px corners, cards 12px, and the mobile sheet 16px top corners. Eve
 
 ## Components
 
-The shared strategy panel contains target presets, exact target adjustment, and normal/long/short work-duration controls. Every adjustable value has a native range input with one-minute steps, an `HH:MM` readout, and one-minute decrement/increment buttons. A reset action restores defaults. Changes update local control state and URL immediately, preserve stale page content, abort superseded requests, and show a non-blocking `업데이트 중` state until the latest response lands.
+The shared strategy panel contains target presets, exact target adjustment, and normal/long/short work-duration controls. Every adjustable value has a native range input with one-minute steps, an `HH:MM` readout, and one-minute decrement/increment buttons. Normal and short durations never go below the 285-minute core-time floor. A reset action restores defaults. Changes update local control state and URL immediately, preserve stale page content, abort superseded requests, and show a non-blocking `업데이트 중` state until the latest response lands.
 
 The plan page may summarize or compare strategies but must not own a second settings implementation.
 

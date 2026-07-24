@@ -155,7 +155,7 @@ export function StrategySwitcher({payload, selected, setTarget, enabled, setting
   const workControls: Array<{label: string; key: keyof WorkSettings; min: number; max: number}> = [
     {label: '보통', key: 'normalDayMinutes', min: settings.shortDayMinutes, max: settings.longDayMinutes},
     {label: '긴 날', key: 'longDayMinutes', min: settings.normalDayMinutes, max: 719},
-    {label: '단축', key: 'shortDayMinutes', min: 60, max: settings.normalDayMinutes},
+    {label: '단축', key: 'shortDayMinutes', min: defaultWorkSettings.shortDayMinutes, max: settings.normalDayMinutes},
   ];
 
   if (!enabled || options.length === 0) return null;

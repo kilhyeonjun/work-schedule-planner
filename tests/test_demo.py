@@ -97,7 +97,44 @@ def test_future_month_route_is_not_returned_as_a_completed_archive():
     assert payload["collectedAt"].startswith("2042-03-04")
 
 
-def test_demo_route_tuning_changes_the_plan():
+def test_default_demo_plan_preserves_core_and_normal_work_priority():
+    planner = month_payload(DEMO_YEAR, DEMO_MONTH, target=7800)["planner"]
+    plan = planner["plan"]
+    positive = [day for day in plan["days"] if day["plannedAdditionalMinutes"] > 0]
+
+    assert planner["strategy"]["mode"] == "commute"
+    assert "보통근무를 우선" in planner["strategy"]["message"]
+    assert any(day["plannedMinutes"] == 500 for day in positive)
+    for day in positive:
+        start, end = day["window"].split("–")
+        assert day["plannedMinutes"] >= 285
+        assert start <= "11:00" and end >= "16:00"
+
+    by_date = {day["date"]: day for day in plan["days"]}
+    for week in plan["summary"]["weekly"]:
+        kinds = [by_date[date]["kind"] for date in week["dates"]]
+        assert week["longDays"] == kinds.count("long")
+        assert week["normalDays"] == kinds.count("normal")
+        assert week["shortDays"] == kinds.count("short")
+        assert week["adjustDays"] == kinds.count("adjust")
+
+    for comparison in planner["comparisons"]:
+        summary = comparison["summary"]
+        assert summary["plannedDays"] == (
+            summary["longDays"] + summary["normalDays"] + summary["shortDays"] + summary["adjustDays"]
+        )
+
+
+def test_demo_target_below_core_floor_fails_closed_without_partial_work():
+    baseline = month_payload(DEMO_YEAR, DEMO_MONTH, target=60)["planner"]["plan"]["recognizedMinutes"]
+    plan = month_payload(DEMO_YEAR, DEMO_MONTH, target=baseline + 1)["planner"]["plan"]
+
+    assert plan["status"] == "insufficient_slots"
+    assert plan["gapMinutes"] == 1
+    assert all(day["plannedAdditionalMinutes"] == 0 for day in plan["days"])
+
+
+def test_demo_route_tuning_preserves_core_time_floor():
     default = json.loads(route("GET", "/demo/api/month", "target=7800")[2])
     tuned = json.loads(
         route("GET", "/demo/api/month", "target=7800&normal=60&long=60&short=60")[2]
@@ -105,8 +142,19 @@ def test_demo_route_tuning_changes_the_plan():
 
     default_plan = default["planner"]["plan"]
     tuned_plan = tuned["planner"]["plan"]
+    assert tuned["planner"]["settings"] == {
+        "normalDayMinutes": 285,
+        "longDayMinutes": 285,
+        "shortDayMinutes": 285,
+    }
     assert tuned_plan["plannedTotalMinutes"] < default_plan["plannedTotalMinutes"]
     assert tuned_plan["days"] != default_plan["days"]
+    for day in tuned_plan["days"]:
+        if day["plannedAdditionalMinutes"] <= 0:
+            continue
+        start, end = day["window"].split("–")
+        assert day["plannedMinutes"] >= 285
+        assert start <= "11:00" and end >= "16:00"
 
 
 def test_demo_route_long_tuning_independently_changes_the_plan():
@@ -163,10 +211,10 @@ def test_today_action_is_derived_from_the_selected_day_plan():
     assert action["workedMinutes"] == today["currentWorkedMinutes"]
     assert action["remainingTodayMinutes"] == today["plannedAdditionalMinutes"]
     assert action["workedMinutes"] + action["remainingTodayMinutes"] == today["plannedMinutes"]
-    assert end_minutes - start_minutes == today["plannedMinutes"]
+    assert end_minutes - start_minutes == today["plannedMinutes"] + 30
 
 
-def test_every_recommended_window_duration_matches_planned_minutes():
+def test_every_recommended_window_includes_the_required_break():
     days = month_payload(DEMO_YEAR, DEMO_MONTH)["planner"]["plan"]["days"]
 
     def minutes(value: str) -> int:
@@ -177,7 +225,9 @@ def test_every_recommended_window_duration_matches_planned_minutes():
         if day["window"] == "—":
             continue
         start, end = day["window"].split("–")
-        assert minutes(end) - minutes(start) == day["plannedMinutes"], day["date"]
+        planned = day["plannedMinutes"]
+        rest = 61 if planned == 719 else 60 if planned >= 480 else 30 if planned >= 240 else 0
+        assert minutes(end) - minutes(start) == planned + rest, day["date"]
 
 
 def test_root_landing_has_only_same_host_demo_and_login_choices():

@@ -130,6 +130,7 @@ test('mobile renders canonical bottom navigation without page overflow', async (
   await page.locator('.switcher__trigger').click();
   const sheet = page.getByRole('dialog', {name: '전략 설정'});
   await expect(sheet.locator('input[type="range"]')).toHaveCount(4);
+  await expect(sheet.getByLabel('단축', {exact: true})).toHaveAttribute('min', '285');
   const geometry = await sheet.evaluate(element => {
     const rect = element.getBoundingClientRect();
     const targets = [...element.querySelectorAll('button')].map(node => node.getBoundingClientRect());
