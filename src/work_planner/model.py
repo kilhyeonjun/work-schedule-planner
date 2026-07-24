@@ -8,6 +8,7 @@ from typing import Any
 @dataclass(frozen=True)
 class Availability:
     available: bool
+    min_work_minutes: int
     max_work_minutes: int
 
 
@@ -97,6 +98,7 @@ def parse_work_month(payload: dict[str, Any]) -> WorkMonth:
             leave_minutes=_integer(raw.get("leaveMinutes"), "leaveMinutes"),
             availability=Availability(
                 available=bool(availability.get("available")),
+                min_work_minutes=_integer(availability.get("minWorkMinutes", 0), "minWorkMinutes"),
                 max_work_minutes=_integer(availability.get("maxWorkMinutes"), "maxWorkMinutes"),
             ),
         )

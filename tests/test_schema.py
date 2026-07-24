@@ -57,6 +57,13 @@ def test_schema_accepts_normalized_operational_input():
     jsonschema.validate(payload, SCHEMA)
 
 
+def test_schema_accepts_optional_minimum_work_minutes():
+    payload = valid_input()
+    payload["days"][0]["availability"]["minWorkMinutes"] = 285
+
+    jsonschema.validate(payload, SCHEMA)
+
+
 @pytest.mark.parametrize(
     ("path", "value"),
     [

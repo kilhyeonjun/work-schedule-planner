@@ -60,6 +60,7 @@
             "required": ["available", "maxWorkMinutes"],
             "properties": {
               "available": {"type": "boolean"},
+              "minWorkMinutes": {"type": "integer", "minimum": 0, "maximum": 1440},
               "maxWorkMinutes": {"type": "integer", "minimum": 0, "maximum": 1440}
             }
           }

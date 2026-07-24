@@ -12,7 +12,7 @@ The public demo, generated fixtures, and screenshots are synthetic-only. The Pyt
 
 ## Trust boundary
 
-The core accepts only the normalized fields in `schema/work-month.schema.json`. `dataOrigin` is `synthetic` for public demo data or `operational` for a private adapter's normalized input. The public demo and committed fixtures enforce `synthetic`; the core itself does not read environment variables, home directories, local caches, network resources, identifiers, or credentials.
+The core accepts only the normalized fields in `schema/work-month.schema.json`. `dataOrigin` is `synthetic` for public demo data or `operational` for a private adapter's normalized input. An adapter may set optional `availability.minWorkMinutes`; then the deterministic planner emits either zero planned work for that date or at least that minimum, failing closed with an explicit gap when no exact allocation is possible. The public demo and committed fixtures enforce `synthetic`; the core itself does not read environment variables, home directories, local caches, network resources, identifiers, or credentials.
 
 This is an engineering demonstration, not legal, payroll, or compliance advice, and not an official integration with any workforce platform.
 

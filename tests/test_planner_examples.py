@@ -95,6 +95,180 @@ def test_preexisting_weekly_overage_does_not_break_future_planning():
     assert result["constraints"]["weeklyCapsPassed"] is True
 
 
+def test_nonzero_plans_respect_minimum_work_minutes():
+    payload = valid_input()
+    payload["targetMinutes"] = 783
+    payload["policy"]["weekdayCaps"] = {}
+    payload["days"] = [
+        {
+            "date": f"2042-03-{day:02d}",
+            "dayType": "workday",
+            "workedMinutes": 0,
+            "recognizedMinutes": 0,
+            "leaveMinutes": 0,
+            "availability": {
+                "available": True,
+                "minWorkMinutes": 285,
+                "maxWorkMinutes": 719,
+            },
+        }
+        for day in range(3, 7)
+    ]
+
+    result = plan_month(payload)
+    planned = [day["plannedWorkMinutes"] for day in result["days"] if day["plannedWorkMinutes"]]
+
+    assert result["status"] == "planned"
+    assert result["gapMinutes"] == 0
+    assert len(planned) == 2
+    assert sorted(planned) == [391, 392]
+    assert result["constraints"]["minimumWorkPassed"] is True
+
+
+def test_minimum_activation_skips_small_cap_when_an_exact_single_day_plan_exists():
+    payload = valid_input()
+    payload["targetMinutes"] = 10
+    payload["policy"]["weekdayCaps"] = {}
+    payload["days"] = [
+        {
+            "date": "2042-03-03",
+            "dayType": "workday",
+            "workedMinutes": 0,
+            "recognizedMinutes": 0,
+            "leaveMinutes": 0,
+            "availability": {"available": True, "minWorkMinutes": 6, "maxWorkMinutes": 6},
+        },
+        {
+            "date": "2042-03-04",
+            "dayType": "workday",
+            "workedMinutes": 0,
+            "recognizedMinutes": 0,
+            "leaveMinutes": 0,
+            "availability": {"available": True, "minWorkMinutes": 5, "maxWorkMinutes": 10},
+        },
+    ]
+
+    result = plan_month(payload)
+
+    assert [day["plannedAdditionalMinutes"] for day in result["days"]] == [0, 10]
+    assert result["gapMinutes"] == 0
+
+
+def test_minimum_activation_preserves_projected_load_balancing():
+    payload = valid_input()
+    payload["targetMinutes"] = 15
+    payload["policy"]["weekdayCaps"] = {}
+    payload["days"] = [
+        {
+            "date": "2042-03-03",
+            "dayType": "workday",
+            "workedMinutes": 10,
+            "recognizedMinutes": 10,
+            "leaveMinutes": 0,
+            "availability": {"available": True, "minWorkMinutes": 15, "maxWorkMinutes": 15},
+        },
+        {
+            "date": "2042-03-04",
+            "dayType": "workday",
+            "workedMinutes": 0,
+            "recognizedMinutes": 0,
+            "leaveMinutes": 0,
+            "availability": {"available": True, "minWorkMinutes": 0, "maxWorkMinutes": 5},
+        },
+    ]
+
+    result = plan_month(payload)
+
+    assert [day["plannedAdditionalMinutes"] for day in result["days"]] == [0, 5]
+    assert [day["projectedRecognizedMinutes"] for day in result["days"]] == [10, 5]
+    assert result["gapMinutes"] == 0
+
+
+def test_minimum_activation_preserves_projected_load_balancing_across_weeks():
+    payload = valid_input()
+    payload["targetMinutes"] = 15
+    payload["policy"]["weekdayCaps"] = {}
+    payload["days"] = [
+        {
+            "date": "2042-03-03",
+            "dayType": "workday",
+            "workedMinutes": 10,
+            "recognizedMinutes": 10,
+            "leaveMinutes": 0,
+            "availability": {"available": True, "minWorkMinutes": 15, "maxWorkMinutes": 15},
+        },
+        {
+            "date": "2042-03-10",
+            "dayType": "workday",
+            "workedMinutes": 0,
+            "recognizedMinutes": 0,
+            "leaveMinutes": 0,
+            "availability": {"available": True, "minWorkMinutes": 0, "maxWorkMinutes": 5},
+        },
+    ]
+
+    result = plan_month(payload)
+
+    assert [day["plannedAdditionalMinutes"] for day in result["days"]] == [0, 5]
+    assert [day["projectedRecognizedMinutes"] for day in result["days"]] == [10, 5]
+    assert result["gapMinutes"] == 0
+
+
+def test_minimum_activation_skips_a_tight_week_when_next_week_can_fulfill_exactly():
+    payload = valid_input()
+    payload["targetMinutes"] = 140
+    payload["policy"]["weeklyLimitMinutes"] = 100
+    payload["policy"]["weekdayCaps"] = {}
+    payload["days"] = [
+        {
+            "date": "2042-03-03",
+            "dayType": "workday",
+            "workedMinutes": 40,
+            "recognizedMinutes": 40,
+            "leaveMinutes": 0,
+            "availability": {"available": True, "minWorkMinutes": 100, "maxWorkMinutes": 100},
+        },
+        {
+            "date": "2042-03-10",
+            "dayType": "workday",
+            "workedMinutes": 0,
+            "recognizedMinutes": 0,
+            "leaveMinutes": 0,
+            "availability": {"available": True, "minWorkMinutes": 50, "maxWorkMinutes": 100},
+        },
+    ]
+
+    result = plan_month(payload)
+
+    assert [day["plannedAdditionalMinutes"] for day in result["days"]] == [0, 100]
+    assert result["gapMinutes"] == 0
+
+
+def test_target_below_minimum_work_fails_closed():
+    payload = valid_input()
+    payload["targetMinutes"] = 196
+    payload["policy"]["weekdayCaps"] = {}
+    payload["days"] = [{
+        "date": "2042-03-03",
+        "dayType": "workday",
+        "workedMinutes": 0,
+        "recognizedMinutes": 0,
+        "leaveMinutes": 0,
+        "availability": {
+            "available": True,
+            "minWorkMinutes": 285,
+            "maxWorkMinutes": 719,
+        },
+    }]
+
+    result = plan_month(payload)
+
+    assert result["status"] == "insufficient_slots"
+    assert result["plannedAdditionalMinutes"] == 0
+    assert result["gapMinutes"] == 196
+    assert result["constraints"]["minimumWorkPassed"] is True
+
+
 def test_satisfied_target_allocates_nothing():
     payload = valid_input()
     payload["targetMinutes"] = 120

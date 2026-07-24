@@ -20,6 +20,10 @@ def daily_additional_cap(day: Day, policy: Policy) -> int:
     return max(0, daily_work_cap(day, policy) - day.worked_minutes)
 
 
+def minimum_additional_work(day: Day) -> int:
+    return max(0, day.availability.min_work_minutes - day.worked_minutes)
+
+
 def weekly_work_baseline(days: tuple[Day, ...]) -> dict[str, int]:
     totals: dict[str, int] = defaultdict(int)
     for day in days:
@@ -32,13 +36,16 @@ def verify_constraints(days: tuple[Day, ...], policy: Policy, allocated: dict[st
     weekly = dict(baseline)
     daily_ok = True
     unavailable_ok = True
+    minimum_ok = True
     for day in days:
         additional = allocated.get(day.date, 0)
         weekly[day.week_key] = weekly.get(day.week_key, 0) + additional
         daily_ok = daily_ok and day.worked_minutes + additional <= daily_work_cap(day, policy)
         if day.day_type != "workday" or not day.availability.available:
             unavailable_ok = unavailable_ok and additional == 0
-    return {
+        if additional:
+            minimum_ok = minimum_ok and day.worked_minutes + additional >= day.availability.min_work_minutes
+    result = {
         "dailyCapsPassed": daily_ok,
         "weeklyCapsPassed": all(
             total <= max(policy.weekly_limit_minutes, baseline.get(week, 0))
@@ -46,3 +53,6 @@ def verify_constraints(days: tuple[Day, ...], policy: Policy, allocated: dict[st
         ),
         "unavailableDaysPassed": unavailable_ok,
     }
+    if any(day.availability.min_work_minutes for day in days):
+        result["minimumWorkPassed"] = minimum_ok
+    return result
