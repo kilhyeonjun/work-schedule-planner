@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
+import work_planner.demo_payload as demo_payload_module
 from scripts.demo_server import Handler
 from work_planner.demo_payload import DEMO_MONTH, DEMO_YEAR, archive_payload, month_payload
 from work_planner.demo_routes import route
@@ -123,6 +124,23 @@ def test_default_demo_plan_preserves_core_and_normal_work_priority():
         assert summary["plannedDays"] == (
             summary["longDays"] + summary["normalDays"] + summary["shortDays"] + summary["adjustDays"]
         )
+
+
+def test_demo_reuses_deterministic_selected_and_comparison_plans(monkeypatch):
+    calls = 0
+    real_plan_month = demo_payload_module.plan_month
+
+    def counted_plan_month(source):
+        nonlocal calls
+        calls += 1
+        return real_plan_month(source)
+
+    demo_payload_module._demo_plan.cache_clear()
+    monkeypatch.setattr(demo_payload_module, "plan_month", counted_plan_month)
+    month_payload(DEMO_YEAR, DEMO_MONTH, target=7800)
+    month_payload(DEMO_YEAR, DEMO_MONTH, target=7800)
+
+    assert calls == 3
 
 
 def test_demo_target_below_core_floor_fails_closed_without_partial_work():

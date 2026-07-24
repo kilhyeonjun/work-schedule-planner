@@ -3,6 +3,7 @@ from __future__ import annotations
 import calendar
 import datetime as dt
 from collections import defaultdict
+from functools import lru_cache
 from itertools import combinations
 from typing import Any
 
@@ -163,6 +164,14 @@ def _normal_first(result: dict[str, Any], source: dict[str, Any], normal: int) -
     return {**result, "days": rows}
 
 
+@lru_cache(maxsize=64)
+def _demo_plan(
+    year: int, month: int, target: int, normal: int, long: int, short: int, archive: bool
+) -> dict[str, Any]:
+    source = _source(year, month, target, normal, long, short, archive=archive)
+    return _normal_first(plan_month(source), source, normal)
+
+
 def _weekly(
     rows: list[dict[str, Any]], actual: dict[str, int], normal: int, long: int, short: int
 ) -> list[dict[str, Any]]:
@@ -246,7 +255,7 @@ def month_payload(
     source = _source(year, month, target, normal, long, short, archive=archive)
     target = max(target, sum(day["recognizedMinutes"] for day in source["days"]))
     source["targetMinutes"] = target
-    result = _normal_first(plan_month(source), source, normal)
+    result = _demo_plan(year, month, target, normal, long, short, archive)
     actual = {day["date"]: day["workedMinutes"] for day in source["days"]}
     recognized = {day["date"]: day["recognizedMinutes"] for day in source["days"]}
     total_actual = sum(actual.values())
@@ -334,10 +343,8 @@ def month_payload(
     options = [("target", "최소 기준", 7200), ("fixed_ot", "수당 기준선", 7800), ("max", "상한", 9000)]
     comparison_plans = []
     for key, label, value in options:
-        comparison_source = _source(year, month, value, normal, long, short, archive=False)
-        comparison_plans.append(
-            (key, label, value, _normal_first(plan_month(comparison_source), comparison_source, normal))
-        )
+        comparison_plan = result if value == target else _demo_plan(year, month, value, normal, long, short, False)
+        comparison_plans.append((key, label, value, comparison_plan))
     weekly = _weekly(result["days"], actual, normal, long, short)
     long_days = [day for day in planner_days if day["kind"] == "long"]
     adjust_days = [day for day in planner_days if day["kind"] == "adjust"]
