@@ -65,6 +65,36 @@ def test_infeasible_target_fails_closed_with_explicit_gap():
     }
 
 
+def test_preexisting_weekly_overage_does_not_break_future_planning():
+    payload = valid_input()
+    payload["targetMinutes"] = 1000
+    payload["policy"]["weeklyLimitMinutes"] = 600
+    payload["policy"]["weekdayCaps"] = {}
+    payload["days"] = [
+        {
+            "date": "2042-03-03",
+            "dayType": "unavailable",
+            "workedMinutes": 700,
+            "recognizedMinutes": 700,
+            "leaveMinutes": 0,
+            "availability": {"available": False, "maxWorkMinutes": 700},
+        },
+        {
+            "date": "2042-03-10",
+            "dayType": "workday",
+            "workedMinutes": 0,
+            "recognizedMinutes": 0,
+            "leaveMinutes": 0,
+            "availability": {"available": True, "maxWorkMinutes": 600},
+        },
+    ]
+
+    result = plan_month(payload)
+
+    assert result["plannedAdditionalMinutes"] == 300
+    assert result["constraints"]["weeklyCapsPassed"] is True
+
+
 def test_satisfied_target_allocates_nothing():
     payload = valid_input()
     payload["targetMinutes"] = 120

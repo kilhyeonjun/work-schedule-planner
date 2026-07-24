@@ -28,7 +28,8 @@ def weekly_work_baseline(days: tuple[Day, ...]) -> dict[str, int]:
 
 
 def verify_constraints(days: tuple[Day, ...], policy: Policy, allocated: dict[str, int]) -> dict[str, bool]:
-    weekly = weekly_work_baseline(days)
+    baseline = weekly_work_baseline(days)
+    weekly = dict(baseline)
     daily_ok = True
     unavailable_ok = True
     for day in days:
@@ -39,6 +40,9 @@ def verify_constraints(days: tuple[Day, ...], policy: Policy, allocated: dict[st
             unavailable_ok = unavailable_ok and additional == 0
     return {
         "dailyCapsPassed": daily_ok,
-        "weeklyCapsPassed": all(total <= policy.weekly_limit_minutes for total in weekly.values()),
+        "weeklyCapsPassed": all(
+            total <= max(policy.weekly_limit_minutes, baseline.get(week, 0))
+            for week, total in weekly.items()
+        ),
         "unavailableDaysPassed": unavailable_ok,
     }
