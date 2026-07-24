@@ -5,6 +5,13 @@ from work_planner import plan_month
 from .test_schema import valid_input
 
 
+def test_core_preserves_operational_origin_for_private_adapters():
+    payload = valid_input()
+    payload["dataOrigin"] = "operational"
+
+    assert plan_month(payload)["dataOrigin"] == "operational"
+
+
 def test_balances_projected_recognized_load_within_one_minute():
     payload = valid_input()
     payload["targetMinutes"] = 960

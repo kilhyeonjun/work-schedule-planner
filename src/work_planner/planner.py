@@ -86,7 +86,7 @@ def plan_month(payload: dict[str, Any]) -> dict[str, Any]:
     if not all(constraints.values()):
         raise AssertionError("planner emitted a hard-constraint violation")
     return {
-        "dataOrigin": "synthetic",
+        "dataOrigin": month.data_origin,
         "generator": month.generator,
         "period": month.period,
         "timezone": month.timezone,

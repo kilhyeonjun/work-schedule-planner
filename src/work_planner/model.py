@@ -62,8 +62,9 @@ def _integer(value: Any, name: str) -> int:
 
 
 def parse_work_month(payload: dict[str, Any]) -> WorkMonth:
-    if payload.get("dataOrigin") != "synthetic":
-        raise ValueError("dataOrigin must be synthetic")
+    data_origin = str(payload.get("dataOrigin") or "")
+    if data_origin not in {"synthetic", "operational"}:
+        raise ValueError("dataOrigin must be synthetic or operational")
     raw_policy = payload.get("policy")
     raw_days = payload.get("days")
     if not isinstance(raw_policy, dict) or not isinstance(raw_days, list) or not raw_days:
@@ -106,7 +107,7 @@ def parse_work_month(payload: dict[str, Any]) -> WorkMonth:
         raise ValueError("day dates must be unique")
 
     return WorkMonth(
-        data_origin="synthetic",
+        data_origin=data_origin,
         generator=dict(payload.get("generator") or {}),
         period=str(payload.get("period") or ""),
         timezone=str(payload.get("timezone") or ""),

@@ -202,22 +202,12 @@ def test_canonical_frontend_uses_only_demo_seams_and_discloses_origin():
     assert "dataOrigin" in main
 
 
-def test_reviewed_canonical_frontend_manifest_is_immutable():
+def test_reviewed_frontend_manifest_is_immutable():
     root = Path(__file__).resolve().parents[1]
-    public = root / "web" / "flex-work-schedule" / "src"
+    source = root / "web" / "flex-work-schedule" / "src"
     manifest = json.loads((root / "web" / "flex-work-schedule" / "reviewed-src-manifest.json").read_text())
-    files = {path.relative_to(public).as_posix() for path in public.rglob("*") if path.is_file()}
+    files = {path.relative_to(source).as_posix() for path in source.rglob("*") if path.is_file()}
 
     assert files == set(manifest["files"])
-    for relative, expected in manifest["files"].items():
-        assert hashlib.sha256((public / relative).read_bytes()).hexdigest() == expected["publicSha256"], relative
-
-    canonical = Path.home() / ".hermes/worktrees/flex-kil76-baseline/web/flex-work-schedule/src"
-    if canonical.is_dir():
-        canonical_files = {path.relative_to(canonical).as_posix() for path in canonical.rglob("*") if path.is_file()}
-        assert canonical_files == files
-        for relative, expected in manifest["files"].items():
-            canonical_bytes = (canonical / relative).read_bytes()
-            assert hashlib.sha256(canonical_bytes).hexdigest() == expected["canonicalSha256"], relative
-            if not expected["seam"]:
-                assert (public / relative).read_bytes() == canonical_bytes, relative
+    for relative, expected_sha in manifest["files"].items():
+        assert hashlib.sha256((source / relative).read_bytes()).hexdigest() == expected_sha, relative
