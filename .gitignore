@@ -5,6 +5,7 @@ __pycache__/
 .ruff_cache/
 .hypothesis/
 dist/
+dist-*/
 build/
 node_modules/
 test-results/
