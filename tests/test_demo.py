@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from scripts.demo_server import route
+from scripts.demo_server import Handler, route
 from work_planner.demo_payload import DEMO_MONTH, DEMO_YEAR, archive_payload, month_payload
 
 
@@ -27,6 +27,21 @@ def test_current_demo_payload_supports_every_canonical_tab():
     }
     assert payload["planner"]["plan"]["summary"]["weekly"]
     assert sum(bool(day["isToday"]) for day in payload["planner"]["plan"]["days"]) == 1
+
+
+def test_demo_server_ignores_client_disconnect_during_write():
+    handler = object.__new__(Handler)
+    object.__setattr__(
+        handler,
+        "wfile",
+        type(
+            "Disconnected",
+            (),
+            {"write": lambda self, body: (_ for _ in ()).throw(BrokenPipeError())},
+        )(),
+    )
+
+    handler._write(b"response")
 
 
 def test_archive_payload_is_read_only_and_omits_planner():

@@ -69,7 +69,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header(key, value)
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
-        self.wfile.write(body.encode() if isinstance(body, str) else body)
+        self._write(body.encode() if isinstance(body, str) else body)
 
     def do_POST(self) -> None:
         status, headers, body = route("POST", urlsplit(self.path).path, "")
@@ -77,7 +77,7 @@ class Handler(BaseHTTPRequestHandler):
         for key, value in headers.items():
             self.send_header(key, value)
         self.end_headers()
-        self.wfile.write(body.encode() if isinstance(body, str) else body)
+        self._write(body.encode() if isinstance(body, str) else body)
 
     def _file(self, path: Path, content_type: str | None = None) -> None:
         if not path.is_file():
@@ -87,7 +87,13 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream")
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
-        self.wfile.write(path.read_bytes())
+        self._write(path.read_bytes())
+
+    def _write(self, body: bytes) -> None:
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def log_message(self, format: str, *args: object) -> None:
         print(f"{self.address_string()} - {format % args}")
