@@ -28,11 +28,12 @@ test('desktop keeps canonical five tabs, target switching, custom target, and ar
   }
 
   await page.locator('.switcher__trigger').click();
-  await page.locator('.switcher__row').first().click();
-  await page.locator('.switcher__trigger').click();
+  const dialog = page.getByRole('dialog', {name: '전략 설정'});
+  await dialog.locator('.switcher__preset').first().click();
   const before = Number(new URL(page.url()).searchParams.get('target'));
-  await page.getByRole('button', {name: '15분 증가'}).click();
-  await expect.poll(() => Number(new URL(page.url()).searchParams.get('target'))).toBe(before + 15);
+  await page.getByRole('button', {name: '목표 1분 증가'}).click();
+  await expect.poll(() => Number(new URL(page.url()).searchParams.get('target'))).toBe(before + 1);
+  await page.keyboard.press('Escape');
 
   await page.locator('.sidebar__item', {hasText: '기록'}).click();
   await page.locator('button.rec-mrow', {hasText: '2월'}).click();
@@ -41,6 +42,55 @@ test('desktop keeps canonical five tabs, target switching, custom target, and ar
   await expect(page.locator('.sidebar__item', {hasText: '계획'})).toHaveCount(0);
   await expect(page.locator('.sidebar__item', {hasText: '분석'})).toHaveCount(0);
 });
+
+test('global strategy modal resets to its initial baseline and latest request wins', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 1000});
+  const aborted: string[] = [];
+  page.on('requestfailed', request => {
+    if (request.url().includes('/demo/api/month?')) aborted.push(request.url());
+  });
+  await page.route('**/demo/api/month?**', async route => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get('normal') === '499') await new Promise(resolve => setTimeout(resolve, 250));
+    await route.continue();
+  });
+  await page.goto('/demo/?year=2042&month=3&tab=calendar');
+  const trigger = page.locator('.switcher__trigger');
+  await trigger.click();
+  const dialog = page.getByRole('dialog', {name: '전략 설정'});
+  await expect(dialog.locator('input[type="range"]')).toHaveCount(4);
+  await expect(page.locator('.content')).toHaveJSProperty('inert', true);
+  await expect(page.locator('.statusbar__nav')).toHaveJSProperty('inert', true);
+
+  await dialog.locator('.switcher__preset').first().click();
+  await page.getByRole('button', {name: '보통 1분 감소'}).click();
+  await expect(dialog.getByText('업데이트 중')).toBeVisible();
+  await page.getByRole('button', {name: '보통 1분 감소'}).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('normal')).toBe('498');
+  await expect.poll(() => aborted.some(url => new URL(url).searchParams.get('normal') === '499')).toBe(true);
+
+  await page.getByRole('button', {name: '기본값 복원'}).click();
+  await expect.poll(() => {
+    const params = new URL(page.url()).searchParams;
+    return [params.get('target'), params.get('normal'), params.get('long'), params.get('short')];
+  }).toEqual(['7800', '500', '719', '285']);
+
+  const monthBefore = new URL(page.url()).searchParams.get('month');
+  await page.locator('.switcher__scrim').click();
+  await expect(dialog).not.toBeVisible();
+  await expect(trigger).toBeFocused();
+  expect(new URL(page.url()).searchParams.get('month')).toBe(monthBefore);
+
+  await trigger.click();
+  const focusable = dialog.locator('button:not([disabled]), input:not([disabled])');
+  await focusable.last().focus();
+  await page.keyboard.press('Tab');
+  await expect(focusable.first()).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(trigger).toBeFocused();
+  await expect(page.locator('.content')).toHaveJSProperty('inert', false);
+});
+
 
 test('month fetch failure does not render cross-scope zero dashboard', async ({page}) => {
   await page.route('**/demo/api/month?**', async route => {
@@ -77,5 +127,20 @@ test('mobile renders canonical bottom navigation without page overflow', async (
   await expect(page.locator('.cal-tab')).toBeVisible();
   await page.locator('button.cal-cell:not([disabled])').first().click();
   await expect(page.locator('.cal-detail')).toBeVisible();
+  await page.locator('.switcher__trigger').click();
+  const sheet = page.getByRole('dialog', {name: '전략 설정'});
+  await expect(sheet.locator('input[type="range"]')).toHaveCount(4);
+  const geometry = await sheet.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    const targets = [...element.querySelectorAll('button')].map(node => node.getBoundingClientRect());
+    return {
+      position: getComputedStyle(element).position,
+      bottom: Math.round(innerHeight - rect.bottom),
+      width: Math.round(rect.width),
+      minTarget: Math.min(...targets.map(rect => Math.min(rect.width, rect.height))),
+    };
+  });
+  expect(geometry).toEqual({position: 'fixed', bottom: 0, width: 390, minTarget: 44});
+  await expect(page.locator('.tabbar')).toHaveJSProperty('inert', true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 });
