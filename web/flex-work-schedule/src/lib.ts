@@ -180,6 +180,7 @@ export function useMonthData(year: number, month: number, target: number | undef
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     const q = new URLSearchParams({year: String(year), month: String(month)});
     if (isCurrentMonth && target) q.set('target', String(target));
     if (isCurrentMonth) {
@@ -189,7 +190,7 @@ export function useMonthData(year: number, month: number, target: number | undef
     }
     setLoading(true);
     setError(null);
-    const request = fetch(`${API_BASE}/month?${q}`, {cache: 'no-store'}).then(async r => {
+    const request = fetch(`${API_BASE}/month?${q}`, {cache: 'no-store', signal: controller.signal}).then(async r => {
       const j = await r.json();
       if (!r.ok || !j.ok) throw new Error(j.error || `HTTP ${r.status}`);
       return j as MonthPayload;
@@ -197,11 +198,11 @@ export function useMonthData(year: number, month: number, target: number | undef
     request.then(j => {
       if (!cancelled) setLoaded({scope, payload: j});
     }).catch(e => {
-      if (!cancelled) setError(String(e.message || e));
+      if (!cancelled && e?.name !== 'AbortError') setError(String(e.message || e));
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; controller.abort(); };
   }, [year, month, target, settings.normalDayMinutes, settings.longDayMinutes, settings.shortDayMinutes, refreshKey]);
   useEffect(() => {
     if (!isCurrentMonth) return;

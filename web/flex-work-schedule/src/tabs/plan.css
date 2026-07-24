@@ -4,7 +4,6 @@
 .plan-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .plan-alt-content { display: flex; flex-direction: column; gap: 8px; }
 .plan-disclosure { display: none; }
-.plan-tuning-content { display: block; }
 
 .plan-seclabel {
   font-family: var(--font-mono); font-size: 11px; color: var(--mut);
@@ -222,15 +221,6 @@ button.plan-strat:hover { border-color: var(--mut); }
 .plan-ki--long { background: var(--kind-long); }
 .plan-ki--normal { background: var(--kind-normal); }
 
-/* ---------- work-day tuning ---------- */
-.plan-tune { display: flex; flex-direction: column; gap: 6px; }
-.plan-tune__row {
-  display: flex; align-items: center; gap: 10px; padding: 6px 10px;
-  border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
-}
-.plan-tune__k { flex: 1; font-size: 12.5px; color: var(--mut); }
-.plan-tune__v { font-size: 13px; color: var(--ink); }
-.plan-tune__ctl { display: flex; gap: 6px; }
 
 /* ---------- skeleton ---------- */
 .plan-skel--strat { height: 128px; }
@@ -248,9 +238,8 @@ button.plan-strat:hover { border-color: var(--mut); }
     width: 100%; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px;
     background: var(--panel); color: var(--ink); font-size: 13px; font-weight: 600;
   }
-  .plan-alt-content, .plan-tuning-content { display: none; }
+  .plan-alt-content { display: none; }
   .plan-alt-content.is-open { display: flex; }
-  .plan-tuning-content.is-open { display: block; margin-top: 8px; }
   .plan-stack { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
   .plan-feas__tags { margin-left: 0; width: 100%; flex-wrap: wrap; }
   .plan-week__mix { display: none; }

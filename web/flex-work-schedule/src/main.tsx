@@ -22,15 +22,9 @@ function App() {
   const [month, setMonth] = useState(() => numParam('month', nowDate().getMonth() + 1));
   const [tab, setTab] = useState(initialTab());
   const [target, setTarget] = useState<number | undefined>(initialTarget());
-  const [draftSettings, setDraftSettings] = useState<WorkSettings>(initialWorkSettings());
   const [settings, setSettings] = useState<WorkSettings>(initialWorkSettings());
   const [selectedDate, setSelectedDate] = useState<string | undefined>(initialSelectedDate());
-
-  // debounce tuning sliders → recompute
-  useEffect(() => {
-    const id = window.setTimeout(() => setSettings(clampWorkSettings(draftSettings)), 320);
-    return () => window.clearTimeout(id);
-  }, [draftSettings.normalDayMinutes, draftSettings.longDayMinutes, draftSettings.shortDayMinutes]);
+  const strategyBaseline = useRef<{target: number; settings: WorkSettings} | null>(null);
 
   const {payload, loading, error: monthError, retry: retryMonth} = useMonthData(year, month, target, settings);
   const {archive, error: archiveError, retry: retryArchive} = useArchive();
@@ -43,15 +37,18 @@ function App() {
     adopted.current = true;
     if (payload.planner?.settings) {
       const normalized = clampWorkSettings(payload.planner.settings);
+      strategyBaseline.current = {
+        target: payload.planner.selectedTargetMinutes || payload.derived?.targetMinutes || 0,
+        settings: normalized,
+      };
       setSettings(normalized);
-      setDraftSettings(normalized);
     }
   }, [payload]);
 
   useEffect(() => {
-    syncUrl({year, month, tab, target, settings: draftSettings, selectedDate});
+    syncUrl({year, month, tab, target, settings, selectedDate});
   }, [year, month, tab, target, selectedDate,
-    draftSettings.normalDayMinutes, draftSettings.longDayMinutes, draftSettings.shortDayMinutes]);
+    settings.normalDayMinutes, settings.longDayMinutes, settings.shortDayMinutes]);
 
   const targetControlsEnabled = payload?.ui?.targetConfiguration?.enabled !== false;
   const archiveMode = payload?.ui?.archiveMode === true || !targetControlsEnabled;
@@ -83,7 +80,7 @@ function App() {
 
   const tabProps = {
     payload, loading, archive, selected, setTarget, archiveMode,
-    settings: draftSettings, setSettings: setDraftSettings,
+    settings, setSettings,
     selectedDate, setSelectedDate,
     year, month, onSelectMonth: (y: number, m: number) => { setYear(y); setMonth(m); setSelectedDate(undefined); },
   };
@@ -104,7 +101,8 @@ function App() {
           </span>
           <span className="statusbar__spacer" />
           {payload?.dataOrigin === 'synthetic' && <span className="statusbar__chip"><span className="dot dot--indigo" />합성 데이터</span>}
-          <StrategySwitcher payload={payload} selected={selected} setTarget={setTarget} enabled={targetControlsEnabled} />
+          <StrategySwitcher payload={payload} selected={selected} setTarget={setTarget} enabled={targetControlsEnabled}
+            settings={settings} setSettings={setSettings} loading={loading} baseline={strategyBaseline.current} />
           <SyncChip payload={payload} archiveMode={archiveMode} />
         </header>
         <main className="content">

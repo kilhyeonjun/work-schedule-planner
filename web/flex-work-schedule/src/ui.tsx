@@ -1,5 +1,7 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
-import {elapsedSinceSync, fmt, MonthPayload, TargetOption, useNow} from './lib';
+import {
+  clampWorkSettings, defaultWorkSettings, elapsedSinceSync, fmt, MonthPayload, TargetOption, useNow, WorkSettings,
+} from './lib';
 
 export function Card({className = '', children}: {className?: string; children: React.ReactNode}) {
   return <div className={`card ${className}`}>{children}</div>;
@@ -86,14 +88,20 @@ export function SyncChip({payload, archiveMode}: {payload: MonthPayload | null; 
   );
 }
 
-/** 전역 전략 퀵 스위처: 헤더 칩 클릭 → 팝오버(데스크톱)/바텀 시트(모바일). */
-export function StrategySwitcher({payload, selected, setTarget, enabled}: {
-  payload: MonthPayload | null; selected: number; setTarget: (n: number) => void; enabled: boolean;
+/** 모든 현재-month 탭에서 같은 상태를 편집하는 전역 전략 패널. */
+export function StrategySwitcher({payload, selected, setTarget, enabled, settings, setSettings, loading, baseline}: {
+  payload: MonthPayload | null;
+  selected: number;
+  setTarget: (n: number) => void;
+  enabled: boolean;
+  settings: WorkSettings;
+  setSettings: (settings: WorkSettings) => void;
+  loading: boolean;
+  baseline: {target: number; settings: WorkSettings} | null;
 }) {
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState('');
   const [invalid, setInvalid] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const close = useCallback(() => {
@@ -109,9 +117,11 @@ export function StrategySwitcher({payload, selected, setTarget, enabled}: {
     if (!open) return;
     const focusable = () => [...(dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled])') || [])];
     focusable()[0]?.focus();
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) close();
-    };
+    const background = [...document.querySelectorAll<HTMLElement>(
+      '.sidebar, .content, .tabbar, .statusbar > :not(.switcher)',
+    )];
+    const previous = background.map(element => element.inert);
+    background.forEach(element => { element.inert = true; });
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close();
       if (e.key !== 'Tab') return;
@@ -122,9 +132,11 @@ export function StrategySwitcher({payload, selected, setTarget, enabled}: {
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     };
-    document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+    return () => {
+      background.forEach((element, index) => { element.inert = previous[index]; });
+      document.removeEventListener('keydown', onKey);
+    };
   }, [open, close]);
 
   const parseCustom = (text: string): number | null => {
@@ -133,12 +145,22 @@ export function StrategySwitcher({payload, selected, setTarget, enabled}: {
     const v = m ? Number(m[1]) * 60 + Number(m[2]) : /^\d{1,3}$/.test(t) ? Number(t) * 60 : null;
     return v !== null && v >= min && v <= max ? v : null;
   };
-  const applyCustom = (v: number) => setTarget(Math.max(min, Math.min(max, v)));
+  const applyTarget = (value: number) => setTarget(Math.max(min, Math.min(max, value)));
+  const applySetting = (key: keyof WorkSettings, value: number) =>
+    setSettings(clampWorkSettings({...settings, [key]: value}));
+  const reset = () => {
+    setTarget(baseline?.target || selected);
+    setSettings(baseline?.settings || defaultWorkSettings);
+  };
+  const workControls: Array<{label: string; key: keyof WorkSettings; min: number; max: number}> = [
+    {label: '보통', key: 'normalDayMinutes', min: settings.shortDayMinutes, max: settings.longDayMinutes},
+    {label: '긴 날', key: 'longDayMinutes', min: settings.normalDayMinutes, max: 719},
+    {label: '단축', key: 'shortDayMinutes', min: 60, max: settings.normalDayMinutes},
+  ];
 
-  // 프리셋이 로드되기 전에는 커스텀 행만 있는 빈 팝오버가 되므로 숨긴다
   if (!enabled || options.length === 0) return null;
   return (
-    <div className="switcher" ref={ref}>
+    <div className="switcher">
       <button ref={triggerRef} className={`statusbar__chip switcher__trigger ${open ? 'is-open' : ''}`} onClick={() => open ? close() : setOpen(true)}
         aria-expanded={open} aria-haspopup="dialog">
         <span className="dot dot--indigo" />
@@ -147,38 +169,67 @@ export function StrategySwitcher({payload, selected, setTarget, enabled}: {
       {open && (
         <>
           <div className="switcher__scrim" onClick={close} />
-          <div ref={dialogRef} className="switcher__panel" role="dialog" aria-modal="true" aria-label="전략 전환">
-            <div className="switcher__title">전략 전환 <span className="statusbar__dim">· 즉시 재계산</span></div>
-            {options.map(o => (
-              <button key={o.key} className={`switcher__row ${o.minutes === selected ? 'is-selected' : ''}`}
-                onClick={() => { setTarget(o.minutes); close(); }}>
-                <span className={`radio ${o.minutes === selected ? 'is-on' : ''}`} />
-                <span className="switcher__label">{o.label}</span>
-                <b className="mono">{fmt(o.minutes)}</b>
-              </button>
-            ))}
+          <div ref={dialogRef} className="switcher__panel" role="dialog" aria-modal="true" aria-label="전략 설정">
+            <div className="switcher__title">
+              <span>전략 설정 <span className="statusbar__dim">· 모든 화면 공통</span></span>
+              <span className={`switcher__updating ${loading ? 'is-active' : ''}`} aria-live="polite">{loading ? '업데이트 중' : '즉시 반영'}</span>
+            </div>
+            <div className="switcher__presets" aria-label="목표 프리셋">
+              {options.map(o => (
+                <button key={o.key} className={`switcher__preset ${o.minutes === selected ? 'is-selected' : ''}`}
+                  aria-pressed={o.minutes === selected} onClick={() => setTarget(o.minutes)}>
+                  <span>{o.label}</span><b className="mono">{fmt(o.minutes)}</b>
+                </button>
+              ))}
+            </div>
             <div className="switcher__divider" />
-            <div className={`switcher__row switcher__row--custom ${selectedOption ? '' : 'is-selected'}`}>
-              <span className={`radio ${selectedOption ? '' : 'is-on'}`} />
-              <span className="switcher__label">커스텀</span>
-              <span className="switcher__custom">
-                <button className="stepper" aria-label="15분 감소" disabled={selected <= min}
-                  onClick={() => applyCustom(selected - 15)}>−</button>
+            <section className="switcher__control">
+              <div className="switcher__control-head">
+                <label htmlFor="strategy-target">목표</label><b className="mono">{fmt(selected)}</b>
+              </div>
+              <div className="switcher__slider-row">
+                <button className="stepper" aria-label="목표 1분 감소" disabled={selected <= min} onClick={() => applyTarget(selected - 1)}>−</button>
+                <input id="strategy-target" className="switcher__range" type="range" min={min} max={max} step={1} value={selected}
+                  onChange={e => applyTarget(Number(e.currentTarget.value))} />
+                <button className="stepper" aria-label="목표 1분 증가" disabled={selected >= max} onClick={() => applyTarget(selected + 1)}>+</button>
+              </div>
+              <div className="switcher__target-input">
                 <input className={`mono switcher__input ${invalid ? 'is-invalid' : ''}`} placeholder={fmt(selected)} value={custom}
-                  aria-label="커스텀 목표 (시:분)"
-                  onChange={e => setCustom(e.currentTarget.value)}
+                  aria-label="커스텀 목표 (시:분)" onChange={e => setCustom(e.currentTarget.value)}
                   onKeyDown={e => {
                     if (e.key !== 'Enter') return;
-                    const v = parseCustom(custom);
-                    if (v !== null) { setTarget(v); setCustom(''); close(); }
+                    const value = parseCustom(custom);
+                    if (value !== null) { setTarget(value); setCustom(''); }
                     else { setInvalid(true); window.setTimeout(() => setInvalid(false), 1000); }
                   }} />
-                <button className="stepper" aria-label="15분 증가" disabled={selected >= max}
-                  onClick={() => applyCustom(selected + 15)}>+</button>
-              </span>
+                <span className="switcher__hint mono">{fmt(min)} – {fmt(max)}</span>
+              </div>
+            </section>
+            <div className="switcher__divider" />
+            <div className="switcher__work-controls">
+              {workControls.map(control => (
+                <section className="switcher__control" key={control.key}>
+                  <div className="switcher__control-head">
+                    <label htmlFor={`strategy-${control.key}`}>{control.label}</label>
+                    <b className="mono">{fmt(settings[control.key])}</b>
+                  </div>
+                  <div className="switcher__slider-row">
+                    <button className="stepper" aria-label={`${control.label} 1분 감소`}
+                      disabled={settings[control.key] <= control.min} onClick={() => applySetting(control.key, settings[control.key] - 1)}>−</button>
+                    <input id={`strategy-${control.key}`} className="switcher__range" type="range"
+                      min={control.min} max={control.max} step={1} value={settings[control.key]}
+                      onChange={e => applySetting(control.key, Number(e.currentTarget.value))} />
+                    <button className="stepper" aria-label={`${control.label} 1분 증가`}
+                      disabled={settings[control.key] >= control.max} onClick={() => applySetting(control.key, settings[control.key] + 1)}>+</button>
+                  </div>
+                </section>
+              ))}
             </div>
-            <div className="switcher__hint mono">{fmt(min)} – {fmt(max)}</div>
-            <div className="switcher__foot">선택은 시뮬레이션 파라미터만 바꿉니다 · Flex에 기록되지 않음</div>
+            <div className="switcher__actions">
+              <button className="switcher__reset" onClick={reset}>기본값 복원</button>
+              <span>변경 즉시 캘린더·계획·합계 재계산</span>
+            </div>
+            <div className="switcher__foot">시뮬레이션 전용 · Flex에는 기록되지 않음</div>
           </div>
         </>
       )}

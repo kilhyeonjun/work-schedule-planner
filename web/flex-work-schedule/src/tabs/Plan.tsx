@@ -1,7 +1,7 @@
 import './plan.css';
 import React, {useRef, useState} from 'react';
 import {
-  clampWorkSettings, fmt, kindLabel, krw, Plan, PlannerDay, Strategy, TabProps, WorkSettings,
+  fmt, kindLabel, krw, Plan, PlannerDay, Strategy, TabProps,
 } from '../lib';
 import {Card, Skel} from '../ui';
 
@@ -13,11 +13,11 @@ const md = (iso?: string) => (iso ? `${Number(iso.slice(5, 7))}/${Number(iso.sli
 const signed = (v: number) => `${v < 0 ? '-' : '+'}${fmt(Math.abs(v))}`;
 const CUSTOM_RE = /^(\d{1,3})(?::([0-5]\d))?$/; // 'H:MM' 또는 콜론 없는 시간(예: 176 → 176:00)
 
-export function PlanTab({payload, loading, selected, setTarget, settings, setSettings}: TabProps) {
+export function PlanTab({payload, loading, selected, setTarget}: TabProps) {
   const [custom, setCustom] = useState('');
   const [flashKind, setFlashKind] = useState<'invalid' | 'clamp' | null>(null);
   const [showAlternatives, setShowAlternatives] = useState(false);
-  const [showTuning, setShowTuning] = useState(false);
+
   const flashTimer = useRef(0);
   const flash = (kind: 'invalid' | 'clamp') => {
     window.clearTimeout(flashTimer.current);
@@ -74,8 +74,6 @@ export function PlanTab({payload, loading, selected, setTarget, settings, setSet
     setCustom('');
   };
 
-  const bump = (key: keyof WorkSettings, d: number) =>
-    setSettings(clampWorkSettings({...settings, [key]: settings[key] + d}));
 
   // 추천 근무표 누적: 현재 인정분 기준선에서 실제 추가분만 더한다.
   let cum = plan.recognizedMinutes || 0;
@@ -328,33 +326,6 @@ export function PlanTab({payload, loading, selected, setTarget, settings, setSet
           </div>
         </Card>
 
-        {/* 근무시간 튜닝 */}
-        <div className="plan-tuning-disclosure">
-          <button type="button" className="plan-disclosure plan-tuning-toggle"
-            aria-expanded={showTuning} onClick={() => setShowTuning(v => !v)}>
-            <span>고급 근무시간 튜닝</span><span aria-hidden="true">{showTuning ? '▴' : '▾'}</span>
-          </button>
-          <div className={`plan-tuning-content${showTuning ? ' is-open' : ''}`}>
-            <Card>
-              <div className="plan-card-h">
-                <span className="plan-card-t">근무시간 튜닝</span>
-                <span className="plan-card-sum">변경 시 자동 재계산</span>
-              </div>
-              <div className="plan-card-b plan-tune">
-                {([['정상', 'normalDayMinutes'], ['긴 날', 'longDayMinutes'], ['단축', 'shortDayMinutes']] as const).map(([label, key]) => (
-                  <div key={key} className="plan-tune__row">
-                    <span className="plan-tune__k">{label}</span>
-                    <b className="mono plan-tune__v">{fmt(settings[key])}</b>
-                    <span className="plan-tune__ctl">
-                      <button type="button" className="stepper" aria-label={`${label} 5분 감소`} onClick={() => bump(key, -5)}>−</button>
-                      <button type="button" className="stepper" aria-label={`${label} 5분 증가`} onClick={() => bump(key, 5)}>+</button>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </div>
-        </div>
 
       </div>
     </div>
