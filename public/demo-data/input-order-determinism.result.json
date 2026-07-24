@@ -1,0 +1,197 @@
+{
+  "dataOrigin": "synthetic",
+  "generator": {
+    "name": "constraint-work-planner-scenarios",
+    "seed": 7601,
+    "version": "1"
+  },
+  "result": {
+    "algorithm": {
+      "name": "deterministic-water-fill",
+      "version": "1"
+    },
+    "constraints": {
+      "dailyCapsPassed": true,
+      "unavailableDaysPassed": true,
+      "weeklyCapsPassed": true
+    },
+    "dataOrigin": "synthetic",
+    "days": [
+      {
+        "dailyWorkCapMinutes": 600,
+        "date": "2042-03-03",
+        "dayType": "workday",
+        "leaveMinutes": 0,
+        "plannedAdditionalMinutes": 207,
+        "plannedWorkMinutes": 387,
+        "projectedRecognizedMinutes": 387,
+        "reasons": [
+          "lowest_projected_recognized_load"
+        ],
+        "recognizedMinutes": 180,
+        "week": "2042-W10",
+        "weekday": 0,
+        "workedMinutes": 180
+      },
+      {
+        "dailyWorkCapMinutes": 600,
+        "date": "2042-03-04",
+        "dayType": "workday",
+        "leaveMinutes": 0,
+        "plannedAdditionalMinutes": 87,
+        "plannedWorkMinutes": 387,
+        "projectedRecognizedMinutes": 387,
+        "reasons": [
+          "lowest_projected_recognized_load"
+        ],
+        "recognizedMinutes": 300,
+        "week": "2042-W10",
+        "weekday": 1,
+        "workedMinutes": 300
+      },
+      {
+        "dailyWorkCapMinutes": 600,
+        "date": "2042-03-05",
+        "dayType": "workday",
+        "leaveMinutes": 120,
+        "plannedAdditionalMinutes": 0,
+        "plannedWorkMinutes": 300,
+        "projectedRecognizedMinutes": 420,
+        "reasons": [
+          "recognized_leave_retained"
+        ],
+        "recognizedMinutes": 420,
+        "week": "2042-W10",
+        "weekday": 2,
+        "workedMinutes": 300
+      },
+      {
+        "dailyWorkCapMinutes": 600,
+        "date": "2042-03-06",
+        "dayType": "workday",
+        "leaveMinutes": 0,
+        "plannedAdditionalMinutes": 387,
+        "plannedWorkMinutes": 387,
+        "projectedRecognizedMinutes": 387,
+        "reasons": [
+          "lowest_projected_recognized_load"
+        ],
+        "recognizedMinutes": 0,
+        "week": "2042-W10",
+        "weekday": 3,
+        "workedMinutes": 0
+      },
+      {
+        "dailyWorkCapMinutes": 600,
+        "date": "2042-03-07",
+        "dayType": "workday",
+        "leaveMinutes": 0,
+        "plannedAdditionalMinutes": 387,
+        "plannedWorkMinutes": 387,
+        "projectedRecognizedMinutes": 387,
+        "reasons": [
+          "lowest_projected_recognized_load"
+        ],
+        "recognizedMinutes": 0,
+        "week": "2042-W10",
+        "weekday": 4,
+        "workedMinutes": 0
+      },
+      {
+        "dailyWorkCapMinutes": 600,
+        "date": "2042-03-10",
+        "dayType": "workday",
+        "leaveMinutes": 0,
+        "plannedAdditionalMinutes": 387,
+        "plannedWorkMinutes": 387,
+        "projectedRecognizedMinutes": 387,
+        "reasons": [
+          "lowest_projected_recognized_load"
+        ],
+        "recognizedMinutes": 0,
+        "week": "2042-W11",
+        "weekday": 0,
+        "workedMinutes": 0
+      },
+      {
+        "dailyWorkCapMinutes": 600,
+        "date": "2042-03-11",
+        "dayType": "workday",
+        "leaveMinutes": 0,
+        "plannedAdditionalMinutes": 387,
+        "plannedWorkMinutes": 387,
+        "projectedRecognizedMinutes": 387,
+        "reasons": [
+          "lowest_projected_recognized_load"
+        ],
+        "recognizedMinutes": 0,
+        "week": "2042-W11",
+        "weekday": 1,
+        "workedMinutes": 0
+      },
+      {
+        "dailyWorkCapMinutes": 600,
+        "date": "2042-03-12",
+        "dayType": "workday",
+        "leaveMinutes": 0,
+        "plannedAdditionalMinutes": 386,
+        "plannedWorkMinutes": 386,
+        "projectedRecognizedMinutes": 386,
+        "reasons": [
+          "lowest_projected_recognized_load"
+        ],
+        "recognizedMinutes": 0,
+        "week": "2042-W11",
+        "weekday": 2,
+        "workedMinutes": 0
+      },
+      {
+        "dailyWorkCapMinutes": 600,
+        "date": "2042-03-13",
+        "dayType": "workday",
+        "leaveMinutes": 0,
+        "plannedAdditionalMinutes": 386,
+        "plannedWorkMinutes": 386,
+        "projectedRecognizedMinutes": 386,
+        "reasons": [
+          "lowest_projected_recognized_load"
+        ],
+        "recognizedMinutes": 0,
+        "week": "2042-W11",
+        "weekday": 3,
+        "workedMinutes": 0
+      },
+      {
+        "dailyWorkCapMinutes": 600,
+        "date": "2042-03-14",
+        "dayType": "workday",
+        "leaveMinutes": 0,
+        "plannedAdditionalMinutes": 386,
+        "plannedWorkMinutes": 386,
+        "projectedRecognizedMinutes": 386,
+        "reasons": [
+          "lowest_projected_recognized_load"
+        ],
+        "recognizedMinutes": 0,
+        "week": "2042-W11",
+        "weekday": 4,
+        "workedMinutes": 0
+      }
+    ],
+    "explanation": "Additional work is balanced by projected recognized load while hard limits remain intact.",
+    "gapMinutes": 0,
+    "generator": {
+      "name": "constraint-work-planner-scenarios",
+      "seed": 7601,
+      "version": "1"
+    },
+    "period": "2042-03",
+    "plannedAdditionalMinutes": 3000,
+    "projectedRecognizedMinutes": 3900,
+    "recognizedBaselineMinutes": 900,
+    "status": "planned",
+    "targetMinutes": 3900,
+    "timezone": "UTC"
+  },
+  "scenario": "input-order-determinism"
+}

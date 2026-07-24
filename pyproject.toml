@@ -1,0 +1,23 @@
+[project]
+name = "constraint-work-planner"
+version = "0.1.0"
+description = "Deterministic constraint-based work planning with synthetic data"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["jsonschema>=4.23,<5"]
+
+[project.optional-dependencies]
+dev = ["hypothesis>=6,<7", "pytest>=8,<10"]
+
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/work_planner"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100

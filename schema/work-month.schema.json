@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schema/work-month.schema.json",
+  "title": "Synthetic work-month planning input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["dataOrigin", "generator", "period", "timezone", "targetMinutes", "policy", "days"],
+  "properties": {
+    "dataOrigin": {"const": "synthetic"},
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "seed"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 64},
+        "version": {"type": "string", "minLength": 1, "maxLength": 32},
+        "seed": {"type": "integer", "minimum": 0, "maximum": 4294967295}
+      }
+    },
+    "period": {"type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"},
+    "timezone": {"type": "string", "minLength": 1, "maxLength": 64},
+    "targetMinutes": {"type": "integer", "minimum": 0, "maximum": 44640},
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["weeklyLimitMinutes", "normalMinutes", "maxMinutes", "dateOverrides", "weekdayCaps"],
+      "properties": {
+        "weeklyLimitMinutes": {"type": "integer", "minimum": 0, "maximum": 10080},
+        "normalMinutes": {"type": "integer", "minimum": 0, "maximum": 1440},
+        "maxMinutes": {"type": "integer", "minimum": 0, "maximum": 1440},
+        "dateOverrides": {
+          "type": "object",
+          "propertyNames": {"pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])$"},
+          "additionalProperties": {"type": "integer", "minimum": 0, "maximum": 1440}
+        },
+        "weekdayCaps": {
+          "type": "object",
+          "propertyNames": {"pattern": "^[0-6]$"},
+          "additionalProperties": {"type": "integer", "minimum": 0, "maximum": 1440}
+        }
+      }
+    },
+    "days": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 31,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["date", "dayType", "workedMinutes", "recognizedMinutes", "leaveMinutes", "availability"],
+        "properties": {
+          "date": {"type": "string", "format": "date"},
+          "dayType": {"enum": ["workday", "weekend", "holiday"]},
+          "workedMinutes": {"type": "integer", "minimum": 0, "maximum": 1440},
+          "recognizedMinutes": {"type": "integer", "minimum": 0, "maximum": 1440},
+          "leaveMinutes": {"type": "integer", "minimum": 0, "maximum": 1440},
+          "availability": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["available", "maxWorkMinutes"],
+            "properties": {
+              "available": {"type": "boolean"},
+              "maxWorkMinutes": {"type": "integer", "minimum": 0, "maximum": 1440}
+            }
+          }
+        }
+      }
+    }
+  }
+}

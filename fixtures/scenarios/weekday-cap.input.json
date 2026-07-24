@@ -1,0 +1,132 @@
+{
+  "dataOrigin": "synthetic",
+  "days": [
+    {
+      "availability": {
+        "available": true,
+        "maxWorkMinutes": 600
+      },
+      "date": "2042-03-03",
+      "dayType": "workday",
+      "leaveMinutes": 0,
+      "recognizedMinutes": 180,
+      "workedMinutes": 180
+    },
+    {
+      "availability": {
+        "available": true,
+        "maxWorkMinutes": 600
+      },
+      "date": "2042-03-04",
+      "dayType": "workday",
+      "leaveMinutes": 0,
+      "recognizedMinutes": 300,
+      "workedMinutes": 300
+    },
+    {
+      "availability": {
+        "available": true,
+        "maxWorkMinutes": 600
+      },
+      "date": "2042-03-05",
+      "dayType": "workday",
+      "leaveMinutes": 120,
+      "recognizedMinutes": 420,
+      "workedMinutes": 300
+    },
+    {
+      "availability": {
+        "available": true,
+        "maxWorkMinutes": 600
+      },
+      "date": "2042-03-06",
+      "dayType": "workday",
+      "leaveMinutes": 0,
+      "recognizedMinutes": 0,
+      "workedMinutes": 0
+    },
+    {
+      "availability": {
+        "available": true,
+        "maxWorkMinutes": 600
+      },
+      "date": "2042-03-07",
+      "dayType": "workday",
+      "leaveMinutes": 0,
+      "recognizedMinutes": 0,
+      "workedMinutes": 0
+    },
+    {
+      "availability": {
+        "available": true,
+        "maxWorkMinutes": 600
+      },
+      "date": "2042-03-10",
+      "dayType": "workday",
+      "leaveMinutes": 0,
+      "recognizedMinutes": 0,
+      "workedMinutes": 0
+    },
+    {
+      "availability": {
+        "available": true,
+        "maxWorkMinutes": 600
+      },
+      "date": "2042-03-11",
+      "dayType": "workday",
+      "leaveMinutes": 0,
+      "recognizedMinutes": 0,
+      "workedMinutes": 0
+    },
+    {
+      "availability": {
+        "available": true,
+        "maxWorkMinutes": 600
+      },
+      "date": "2042-03-12",
+      "dayType": "workday",
+      "leaveMinutes": 0,
+      "recognizedMinutes": 0,
+      "workedMinutes": 0
+    },
+    {
+      "availability": {
+        "available": true,
+        "maxWorkMinutes": 600
+      },
+      "date": "2042-03-13",
+      "dayType": "workday",
+      "leaveMinutes": 0,
+      "recognizedMinutes": 0,
+      "workedMinutes": 0
+    },
+    {
+      "availability": {
+        "available": true,
+        "maxWorkMinutes": 600
+      },
+      "date": "2042-03-14",
+      "dayType": "workday",
+      "leaveMinutes": 0,
+      "recognizedMinutes": 0,
+      "workedMinutes": 0
+    }
+  ],
+  "generator": {
+    "name": "constraint-work-planner-scenarios",
+    "seed": 7601,
+    "version": "1"
+  },
+  "period": "2042-03",
+  "policy": {
+    "dateOverrides": {},
+    "maxMinutes": 600,
+    "normalMinutes": 420,
+    "weekdayCaps": {
+      "4": 360
+    },
+    "weeklyLimitMinutes": 2400
+  },
+  "targetMinutes": 3900,
+  "timezone": "UTC"
+}
