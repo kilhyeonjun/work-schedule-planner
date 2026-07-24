@@ -4,8 +4,9 @@ import hashlib
 import json
 from pathlib import Path
 
-from scripts.demo_server import Handler, route
+from scripts.demo_server import Handler
 from work_planner.demo_payload import DEMO_MONTH, DEMO_YEAR, archive_payload, month_payload
+from work_planner.demo_routes import route
 
 
 def test_current_demo_payload_supports_every_canonical_tab():
