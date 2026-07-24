@@ -24,6 +24,8 @@ def test_strategy_controls_are_global_immediate_and_single_source():
     assert "plan-tuning" not in plan
     assert "AbortController" in lib
     assert "signal: controller.signal" in lib
+    assert "Math.max(defaultWorkSettings.shortDayMinutes" in lib
+    assert "key: 'shortDayMinutes', min: defaultWorkSettings.shortDayMinutes" in ui
     assert "element.inert = true" in ui
     assert "baseline?.target" in ui and "baseline?.settings" in ui
     assert "global strategy modal resets to its initial baseline" in e2e

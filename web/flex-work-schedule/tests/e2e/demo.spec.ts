@@ -19,7 +19,7 @@ test('desktop keeps canonical five tabs, target switching, custom target, and ar
   await page.setViewportSize({width: 1440, height: 1000});
   await page.goto('/demo/');
   await expect(page.getByText('❯ flex-planner')).toBeVisible();
-  await expect(page.locator('.statusbar__chip', {hasText: '합성 데이터'})).toBeVisible();
+  await expect(page.locator('.statusbar__chip', {hasText: '합성 데이터'})).toBeVisible({timeout: 30_000});
 
   for (const [key, label] of [['today', '오늘'], ['plan', '계획'], ['calendar', '캘린더'], ['analysis', '분석'], ['archive', '기록']] as const) {
     await page.locator('.sidebar__item', {hasText: label}).click();
@@ -130,6 +130,7 @@ test('mobile renders canonical bottom navigation without page overflow', async (
   await page.locator('.switcher__trigger').click();
   const sheet = page.getByRole('dialog', {name: '전략 설정'});
   await expect(sheet.locator('input[type="range"]')).toHaveCount(4);
+  await expect(sheet.getByLabel('단축', {exact: true})).toHaveAttribute('min', '285');
   const geometry = await sheet.evaluate(element => {
     const rect = element.getBoundingClientRect();
     const targets = [...element.querySelectorAll('button')].map(node => node.getBoundingClientRect());

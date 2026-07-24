@@ -56,7 +56,8 @@ export type Comparison = {
   key: string; label: string; targetMinutes: number; selected?: boolean; status?: string;
   remainingMinutes?: number; gapMinutes?: number; effortLabel?: string; effortMessage?: string;
   projectedExtraPayAfterTaxKrw?: number; feasibility?: Feasibility;
-  summary?: {plannedDays?: number; longDays?: number; averageDailyMinutes?: number};
+  summary?: {plannedDays?: number; longDays?: number; normalDays?: number; shortDays?: number; adjustDays?: number;
+    averageDailyMinutes?: number};
 };
 
 export type Strategy = {
@@ -131,9 +132,9 @@ export const dayTypeLabel = (type?: string) =>
 export const defaultWorkSettings: WorkSettings = {normalDayMinutes: 8 * 60 + 20, longDayMinutes: 11 * 60 + 59, shortDayMinutes: 4 * 60 + 45};
 
 export const clampWorkSettings = (s: WorkSettings): WorkSettings => {
-  const normal = Math.max(60, Math.min(719, Number(s.normalDayMinutes) || defaultWorkSettings.normalDayMinutes));
+  const normal = Math.max(defaultWorkSettings.shortDayMinutes, Math.min(719, Number(s.normalDayMinutes) || defaultWorkSettings.normalDayMinutes));
   const longDay = Math.max(normal, Math.min(719, Number(s.longDayMinutes) || defaultWorkSettings.longDayMinutes));
-  const short = Math.max(60, Math.min(normal, Number(s.shortDayMinutes) || defaultWorkSettings.shortDayMinutes));
+  const short = Math.max(defaultWorkSettings.shortDayMinutes, Math.min(normal, Number(s.shortDayMinutes) || defaultWorkSettings.shortDayMinutes));
   return {normalDayMinutes: normal, longDayMinutes: longDay, shortDayMinutes: short};
 };
 

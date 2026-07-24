@@ -36,9 +36,9 @@ def route(method: str, path: str, query_string: str) -> tuple[int, dict[str, str
         year = _number(query, "year", DEMO_YEAR, DEMO_YEAR - 1, DEMO_YEAR)
         month = _number(query, "month", DEMO_MONTH, 1, 12)
         target = _number(query, "target", DEFAULT_TARGET, 60, 9000)
-        normal = _number(query, "normal", 500, 60, 719)
+        normal = _number(query, "normal", 500, 285, 719)
         long = _number(query, "long", 719, normal, 719)
-        short = _number(query, "short", 285, 60, normal)
+        short = _number(query, "short", 285, 285, normal)
         payload = month_payload(year, month, target, normal, long, short)
         return 200, {"Content-Type": "application/json; charset=utf-8"}, json.dumps(payload, ensure_ascii=False)
     return 404, {"Content-Type": "text/plain; charset=utf-8"}, "Not Found"
