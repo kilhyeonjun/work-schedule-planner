@@ -50,6 +50,13 @@ def test_schema_accepts_vendor_neutral_synthetic_input():
     jsonschema.validate(valid_input(), SCHEMA)
 
 
+def test_schema_accepts_normalized_operational_input():
+    payload = valid_input()
+    payload["dataOrigin"] = "operational"
+
+    jsonschema.validate(payload, SCHEMA)
+
+
 @pytest.mark.parametrize(
     ("path", "value"),
     [
@@ -70,7 +77,7 @@ def test_schema_rejects_fields_outside_public_contract(path, value):
         jsonschema.validate(payload, SCHEMA)
 
 
-def test_schema_rejects_non_synthetic_origin():
+def test_schema_rejects_unsupported_origin():
     payload = valid_input()
     payload["dataOrigin"] = "anonymized"
 

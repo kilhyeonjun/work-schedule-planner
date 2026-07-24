@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/schema/work-month.schema.json",
-  "title": "Synthetic work-month planning input",
+  "title": "Normalized work-month planning input",
   "type": "object",
   "additionalProperties": false,
   "required": ["dataOrigin", "generator", "period", "timezone", "targetMinutes", "policy", "days"],
   "properties": {
-    "dataOrigin": {"const": "synthetic"},
+    "dataOrigin": {"enum": ["synthetic", "operational"]},
     "generator": {
       "type": "object",
       "additionalProperties": false,
