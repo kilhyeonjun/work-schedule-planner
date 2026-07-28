@@ -158,14 +158,34 @@ export const initialWorkSettings = () => clampWorkSettings({
 });
 
 export function syncUrl(state: {year: number; month: number; tab: string; target?: number;
-  settings: WorkSettings; selectedDate?: string}) {
+  settings: WorkSettings; selectedDate?: string}, mode: 'push' | 'replace' = 'replace') {
   const q = new URLSearchParams({year: String(state.year), month: String(state.month), tab: state.tab});
   if (state.target) q.set('target', String(state.target));
   q.set('normal', String(state.settings.normalDayMinutes));
   q.set('long', String(state.settings.longDayMinutes));
   q.set('short', String(state.settings.shortDayMinutes));
   if (state.selectedDate) q.set('selectedDate', state.selectedDate);
-  window.history.replaceState(null, '', `${window.location.pathname}?${q}`);
+  window.history[mode === 'push' ? 'pushState' : 'replaceState'](null, '', `${window.location.pathname}?${q}`);
+}
+
+export const currentUrlState = () => {
+  const params = new URLSearchParams(window.location.search);
+  const number = (key: string, fallback: number) => {
+    const value = Number(params.get(key));
+    return Number.isFinite(value) && value > 0 ? value : fallback;
+  };
+  return {
+    year: number('year', nowDate().getFullYear()),
+    month: number('month', nowDate().getMonth() + 1),
+    tab: params.get('tab') || 'today',
+    target: (() => { const value = Number(params.get('target')); return Number.isFinite(value) && value > 0 ? value : undefined; })(),
+    settings: clampWorkSettings({
+      normalDayMinutes: number('normal', defaultWorkSettings.normalDayMinutes),
+      longDayMinutes: number('long', defaultWorkSettings.longDayMinutes),
+      shortDayMinutes: number('short', defaultWorkSettings.shortDayMinutes),
+    }),
+    selectedDate: params.get('selectedDate') || undefined,
+  };
 }
 
 // ---------- data hooks ----------
