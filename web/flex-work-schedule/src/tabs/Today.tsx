@@ -205,8 +205,8 @@ export function TodayTab(props: TabProps) {
                 <span className="today-month__fill" style={{width: `${pct}%`}} />
               </div>
               <div className="today-month__stats">
-                <div><div className="today-month__k">인정 누적</div><div className="mono today-month__v is-acc">{fmt(recognized)}</div></div>
-                <div><div className="today-month__k">남은 시간</div><div className="mono today-month__v">{fmt(plan?.remainingMinutes)}</div></div>
+                <div><div className="today-month__k">현재 인정</div><div className="mono today-month__v is-acc">{fmt(recognized)}</div></div>
+                <div><div className="today-month__k">남은 실제 근무</div><div className="mono today-month__v">{fmt(plan?.remainingMinutes)}</div></div>
                 <div><div className="today-month__k">목표</div><div className="mono today-month__v">{fmt(target)}</div></div>
               </div>
             </div>
