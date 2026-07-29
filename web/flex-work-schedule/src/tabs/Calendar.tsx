@@ -363,6 +363,18 @@ export function CalendarTab(props: TabProps) {
             <span><i>목표 잔여</i><b>{fmt(remainingTotal)}</b></span>
             <span className={forecastTotal === Number(planResult?.targetMinutes || 0) ? 'is-ok' : ''}><i>예상 인정</i><b>{fmt(forecastTotal)}</b></span>
           </div>
+          {planResult?.status === 'over_target' && (
+            <div className="plan-feas plan-feas--warn" role="alert">
+              <span className="plan-feas__st">고정 계획 충돌</span>
+              <span className="plan-feas__msg">예상 {fmt(planResult.forecastMinutes)} · 초과 {fmt(planResult.overTargetMinutes)} · {planResult.conflictReason}</span>
+            </div>
+          )}
+          {planResult?.status === 'insufficient_slots' && (
+            <div className="plan-feas plan-feas--warn" role="alert">
+              <span className="plan-feas__st">배치 부족</span>
+              <span className="plan-feas__msg">부족 {fmt(planResult.gapMinutes)} · {planResult.feasibility?.targetReductionMinutes ? `목표 하향 ${fmt(planResult.feasibility.targetReductionMinutes)}` : '제약 확인 필요'}</span>
+            </div>
+          )}
           <div className="cal-card__b">
             <div className="cal-grid">
               {DOW.map(d => <div key={d} className="cal-dow">{d}</div>)}
