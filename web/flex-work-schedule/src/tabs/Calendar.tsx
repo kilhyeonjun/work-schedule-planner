@@ -62,6 +62,7 @@ export function CalendarTab(props: TabProps) {
 
   const rows = new Map<string, DayRow>((displayedPayload.days || []).map(d => [d.date, d]));
   const plans = new Map<string, PlannerDay>((displayedPayload.planner?.plan?.days || []).map(d => [d.date, d]));
+  const adjustments = new Map((displayedPayload.planner?.plan?.adjustments || []).map(item => [item.date, item]));
 
   // 월 그리드 (월요일 시작, 앞뒤는 타월 자리)
   const lead = (new Date(year, month - 1, 1).getDay() + 6) % 7;
@@ -100,6 +101,7 @@ export function CalendarTab(props: TabProps) {
     }
     const isToday = c.iso === today;
     const isSel = c.iso === selectedDate;
+    const adjustment = adjustments.get(c.iso);
     const clickable = Boolean(c.row || c.plan);
     const rec = c.row ? recMin(c.row) : 0;
     const hybrid = Boolean(isToday && c.row && c.plan && rec > 0);
@@ -123,13 +125,14 @@ export function CalendarTab(props: TabProps) {
     return (
       <button key={c.iso} type="button" data-date={c.iso} className={cls} style={style} disabled={!clickable}
         aria-pressed={isSel}
+        aria-label={adjustment ? `${md(c.iso)} 목표 자동 보정 ${fmt(adjustment.beforeMinutes)} → ${fmt(adjustment.afterMinutes)}` : undefined}
         onClick={() => setSelectedDate(isSel ? undefined : c.iso)}>
         <span className="cal-cell__d mono">{c.label}</span>
         {isToday && <span className="cal-cell__td mono">오늘</span>}
         {(c.row?.timeoff_minutes || 0) > 0 && (
           <span className="cal-vchip mono"><span className="cal-vchip__t">휴가 {fmt(c.row!.timeoff_minutes)}</span></span>
         )}
-        {c.state === 'plan' && <span className="cal-kind">{c.plan?.isDateOverride ? '16시 고정' : kindLabel(c.plan?.kind)}</span>}
+        {c.state === 'plan' && <span className="cal-kind">{adjustment ? '목표 자동 보정' : c.plan?.isDateOverride ? '날짜 고정' : kindLabel(c.plan?.kind)}</span>}
         {hybrid && <span className="cal-kind">진행 중 · {kindLabel(c.plan?.kind)}</span>}
         {offLabel ? <span className="cal-cell__off mono">{offLabel}</span> : null}
         {hybrid ? (
@@ -168,6 +171,7 @@ export function CalendarTab(props: TabProps) {
   // 상세 패널
   const selRow = selectedDate ? rows.get(selectedDate) : undefined;
   const selPlan = selectedDate ? plans.get(selectedDate) : undefined;
+  const selAdjustment = selectedDate ? adjustments.get(selectedDate) : undefined;
   const detailHybrid = Boolean(selectedDate === today && selRow && selPlan && recMin(selRow) > 0);
   const detailDone = Boolean(selRow && recMin(selRow) > 0);
   const overrideEditable = Boolean(selectedDate && selectedDate > today && year === nowDate().getFullYear() && month === nowDate().getMonth() + 1 && selRow && selRow.day_type === 'workday' && !(selRow.timeoff_minutes || 0));
@@ -260,6 +264,7 @@ export function CalendarTab(props: TabProps) {
                   {kv('실근무', fmt(selRow.work_minutes), !(selRow.work_minutes))}
                   {kv('사무실', fmt(selRow.office_minutes), !(selRow.office_minutes))}
                   {kv('재택', fmt(selRow.remote_minutes), !(selRow.remote_minutes))}
+                  {kv('추가 근무', fmt(selRow.unknown_minutes), !(selRow.unknown_minutes))}
                   {kv('휴게', fmt(selRow.rest_minutes), !(selRow.rest_minutes))}
                   {kv('야간', fmt(selRow.night_minutes), !(selRow.night_minutes))}
                   {(selRow.timeoff_minutes || 0) > 0 && kv('휴가', fmt(selRow.timeoff_minutes), false, true)}
@@ -290,10 +295,11 @@ export function CalendarTab(props: TabProps) {
                 <div className="cal-kv">
                   <div className="cal-kv__row">
                     <span className="cal-kv__k">종류</span>
-                    <span className="cal-kv__v"><span className={`kind-tag kind-tag--${editorPlan.kind}`}>{editorPlan.isDateOverride ? '16시 퇴근 고정' : kindLabel(editorPlan.kind)}</span></span>
+                    <span className="cal-kv__v"><span className={`kind-tag kind-tag--${editorPlan.kind}`}>{selAdjustment ? '목표 자동 보정' : editorPlan.isDateOverride ? '날짜 고정' : kindLabel(editorPlan.kind)}</span></span>
                   </div>
                   {kv('시간대', editorPlan.window)}
                   {kv('계획', fmt(editorPlan.plannedMinutes))}
+                  {selAdjustment && kv('최종 배정', <>이전/선호 {fmt(selAdjustment.beforeMinutes)} → 최종 배정 {fmt(selAdjustment.afterMinutes)}</>)}
                   {editorPlan.plannedAdditionalMinutes != null && kv('추가 인정', fmt(editorPlan.plannedAdditionalMinutes))}
                   {(editorPlan.timeoffMinutes || 0) > 0 && kv('휴가', fmt(editorPlan.timeoffMinutes), false, true)}
                 </div>
@@ -363,6 +369,12 @@ export function CalendarTab(props: TabProps) {
             <span><i>목표 잔여</i><b>{fmt(remainingTotal)}</b></span>
             <span className={forecastTotal === Number(planResult?.targetMinutes || 0) ? 'is-ok' : ''}><i>예상 인정</i><b>{fmt(forecastTotal)}</b></span>
           </div>
+          {planResult?.isAutoAdjusted && (planResult.adjustments || []).map(item => (
+            <div key={item.date} className="plan-feas" role="status">
+              <span className="plan-feas__st">목표 자동 보정 ·</span>{' '}
+              <span className="plan-feas__msg">{md(item.date)} {fmt(item.beforeMinutes)} → {fmt(item.afterMinutes)} · 예상 {fmt(planResult.forecastMinutes ?? forecastTotal)}</span>
+            </div>
+          ))}
           {planResult?.status === 'over_target' && (
             <div className="plan-feas plan-feas--warn" role="alert">
               <span className="plan-feas__st">고정 계획 충돌</span>

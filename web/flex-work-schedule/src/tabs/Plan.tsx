@@ -280,7 +280,7 @@ export function PlanTab({payload, loading, selected, setTarget}: TabProps) {
                         <span className="mono plan-date">{md(d.date)}</span>
                         <span className="mono plan-dow">{d.weekday}</span>
                       </td>
-                      <td><span className={`kind-tag kind-tag--${d.kind}`}>{d.isDateOverride ? '16시 고정' : kindLabel(d.kind)}</span></td>
+                      <td><span className={`kind-tag kind-tag--${d.kind}`}>{d.isDateOverride ? '날짜 고정' : kindLabel(d.kind)}</span></td>
                       <td><span className="mono plan-win">{d.window}</span></td>
                       <td className="plan-r"><span className="mono plan-add">+{fmt(additional)}</span></td>
                       <td className="plan-r"><span className="mono">{(d.currentWorkedMinutes || 0) > 0 ? fmt(d.currentWorkedMinutes) : '—'}</span></td>

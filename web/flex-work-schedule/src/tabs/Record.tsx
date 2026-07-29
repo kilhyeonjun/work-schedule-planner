@@ -9,7 +9,7 @@ const PAGE_SIZE = 10;
 const recMin = (d: DayRow) => d.recognized_minutes ?? (d.work_minutes || 0) + (d.timeoff_minutes || 0);
 
 const kindText = (d: DayRow) =>
-  [dayTypeLabel(d.day_type), d.remote_minutes ? '재택' : '', d.timeoff_minutes ? '휴가' : '']
+  [dayTypeLabel(d.day_type), d.remote_minutes ? '재택' : '', d.unknown_minutes ? '추가 근무' : '', d.timeoff_minutes ? '휴가' : '']
     .filter(Boolean).join('·');
 
 const dash = <span className="rec-dash mono">—</span>;
@@ -196,7 +196,7 @@ export function RecordTab({payload, loading, archive, archiveMode, year, month, 
                 <tr>
                   <th>날짜</th><th>구분</th>
                   <th className="r">인정</th><th className="r rec-col--secondary">사무실</th>
-                  <th className="r rec-col--secondary">재택</th><th className="r rec-col--secondary">휴가</th>
+                  <th className="r rec-col--secondary">재택</th><th className="r rec-col--secondary">추가 근무</th><th className="r rec-col--secondary">휴가</th>
                   <th>출퇴근</th><th className="rec-col--secondary">비고</th>
                 </tr>
               </thead>
@@ -212,6 +212,7 @@ export function RecordTab({payload, loading, archive, archiveMode, year, month, 
                       ? <span className="rec-cred mono">{fmt(recMin(d))}</span> : dash}</td>
                     <td className="r rec-col--secondary">{d.office_minutes ? <span className="rec-sec mono">{fmt(d.office_minutes)}</span> : dash}</td>
                     <td className="r rec-col--secondary">{d.remote_minutes ? <span className="rec-sec mono">{fmt(d.remote_minutes)}</span> : dash}</td>
+                    <td className="r rec-col--secondary">{d.unknown_minutes ? <span className="rec-sec mono">{fmt(d.unknown_minutes)}</span> : dash}</td>
                     <td className="r rec-col--secondary">{d.timeoff_minutes ? <span className="rec-vac mono">{fmt(d.timeoff_minutes)}</span> : dash}</td>
                     <td>{d.first_start && d.last_end
                       ? <span className="rec-win mono">{d.first_start} – {d.last_end}</span> : dash}</td>
@@ -219,7 +220,7 @@ export function RecordTab({payload, loading, archive, archiveMode, year, month, 
                   </tr>
                 ))}
                 {rows.length === 0 && (
-                  <tr><td colSpan={8}><div className="rec-empty">확정 기록 없음</div></td></tr>
+                  <tr><td colSpan={9}><div className="rec-empty">확정 기록 없음</div></td></tr>
                 )}
               </tbody>
             </table>

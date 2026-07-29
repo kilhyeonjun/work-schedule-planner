@@ -210,3 +210,64 @@ test('future workday without allocation opens a non-empty local recommendation e
   await expect(page.getByRole('button', {name: '기본 500'})).toBeVisible();
   await expect(page.locator('.cal-detail .cal-hero__k')).toHaveText('계획');
 });
+
+test('production-shaped auto adjustment shows final truth across calendar, today, and record', async ({page}) => {
+  await page.addInitScript(() => Object.defineProperty(window, '__DEMO_TODAY__', {get: () => '2026-07-30', set: () => {}}));
+  await page.route('**/demo/api/month?**', async route => {
+    const response = await route.fetch({url: 'http://127.0.0.1:18787/demo/api/month?year=2042&month=3'});
+    const body = await response.json();
+    body.year = 2026;
+    body.month = 7;
+    body.days.forEach((day: {date: string}) => { day.date = `2026-07-${day.date.slice(-2)}`; });
+    body.planner.plan.days.forEach((day: {date: string; plannedMinutes: number; plannedAdditionalMinutes: number}) => {
+      day.date = `2026-07-${day.date.slice(-2)}`;
+      day.plannedMinutes = 0;
+      day.plannedAdditionalMinutes = 0;
+    });
+    const today = body.days.find((day: {date: string}) => day.date === '2026-07-30');
+    Object.assign(today, {day_type: 'workday', work_minutes: 671, recognized_minutes: 671, office_minutes: 609, remote_minutes: 62, unknown_minutes: 0, rest_minutes: 60});
+    const thu = body.planner.plan.days.find((day: {date: string}) => day.date === '2026-07-30');
+    const fri = body.planner.plan.days.find((day: {date: string}) => day.date === '2026-07-31');
+    Object.assign(thu, {kind: 'normal', window: '06:40–16:00', plannedMinutes: 500, plannedAdditionalMinutes: 500, isDateOverride: true});
+    Object.assign(fri, {kind: 'adjust', window: '06:40–14:53', plannedMinutes: 433, plannedAdditionalMinutes: 433, isDateOverride: true});
+    Object.assign(body.planner.plan, {status: 'planned', gapMinutes: 0, overTargetMinutes: 0, plannedTotalMinutes: 14112, forecastMinutes: 14112, isAutoAdjusted: true, adjustments: [{date: '2026-07-31', beforeMinutes: 500, afterMinutes: 433}], reason: '목표 자동 보정'});
+    await route.fulfill({response, body: JSON.stringify(body)});
+  });
+  await page.goto('/demo/?year=2026&month=7&tab=calendar');
+  await expect(page.locator('.plan-feas').filter({hasText: '목표 자동 보정'})).toContainText('목표 자동 보정 · 7/31 8:20 → 7:13 · 예상 235:12');
+  const adjusted = page.locator('button.cal-cell[data-date="2026-07-31"]');
+  await expect(adjusted).toContainText('목표 자동 보정');
+  await expect(adjusted).toContainText('7:13');
+  await expect(adjusted).not.toContainText('16시 고정');
+  await expect(page.getByText('고정 계획 충돌')).toHaveCount(0);
+  await adjusted.click();
+  await expect(page.getByText('이전/선호 8:20 → 최종 배정 7:13')).toBeVisible();
+  await page.locator('.sidebar__item', {hasText: '오늘'}).click();
+  await expect(page.locator('.today-ledger')).toContainText('사무실10:09');
+  await expect(page.locator('.today-ledger')).toContainText('원격1:02');
+  await expect(page.locator('.today-ledger')).toContainText('추가 근무0:00');
+  await page.locator('.sidebar__item', {hasText: '기록'}).click();
+  await page.locator('button.rec-pbtn', {hasText: '3'}).click();
+  const currentRow = page.locator('.rec-table tbody tr').filter({hasText: '7/30'});
+  await expect(currentRow).toContainText('재택');
+  await expect(currentRow).toContainText('10:09');
+  await expect(currentRow).toContainText('1:02');
+});
+
+test('unknown work is never classified as office or remote', async ({page}) => {
+  await page.route('**/demo/api/month?**', async route => {
+    const response = await route.fetch();
+    const body = await response.json();
+    const today = body.days.find((day: {date: string}) => day.date === '2042-03-04');
+    Object.assign(today, {office_minutes: 0, remote_minutes: 0, unknown_minutes: 45, work_minutes: 45, recognized_minutes: 45});
+    await route.fulfill({response, body: JSON.stringify(body)});
+  });
+  await page.goto('/demo/?tab=today');
+  await expect(page.locator('.today-ledger')).toContainText('추가 근무0:45');
+  await expect(page.locator('.today-ledger')).not.toContainText('사무실0:45');
+  await expect(page.locator('.today-ledger')).not.toContainText('원격0:45');
+  await page.locator('.sidebar__item', {hasText: '기록'}).click();
+  const unknownRow = page.locator('.rec-table tbody tr').filter({hasText: '3/4'});
+  await expect(unknownRow).toContainText('추가 근무');
+  await expect(unknownRow).not.toContainText('재택');
+});
