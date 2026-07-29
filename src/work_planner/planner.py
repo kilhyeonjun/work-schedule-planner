@@ -191,8 +191,24 @@ def _allocate(payload: dict[str, Any]) -> tuple[Any, dict[str, int]]:
     requested = max(0, month.target_minutes - baseline)
     weekly_work = weekly_work_baseline(month.days)
     daily_caps = {day.date: daily_additional_cap(day, month.policy) for day in month.days}
-    remaining, activated = _minimum_activation(month, daily_caps, weekly_work, requested)
 
+    # A date override is a fixed local plan, not a cap. Lock it before the
+    # deterministic allocator so it can only redistribute across other dates.
+    fixed_total = 0
+    for day in month.days:
+        if day.date not in month.policy.date_overrides:
+            continue
+        fixed = month.policy.date_overrides[day.date] - day.worked_minutes
+        if fixed < 0 or fixed > daily_caps[day.date]:
+            raise ValueError(f"date override is outside eligible capacity: {day.date}")
+        allocated[day.date] = fixed
+        fixed_total += fixed
+        weekly_work[day.week_key] = weekly_work.get(day.week_key, 0) + fixed
+        daily_caps[day.date] = 0
+    if fixed_total > requested:
+        raise ValueError("date overrides exceed the remaining target")
+
+    remaining, activated = _minimum_activation(month, daily_caps, weekly_work, requested - fixed_total)
     for day in month.days:
         if day.date not in activated:
             continue

@@ -269,6 +269,21 @@ def test_target_below_minimum_work_fails_closed():
     assert result["constraints"]["minimumWorkPassed"] is True
 
 
+def test_date_override_is_fixed_and_redistributes_remaining_target():
+    payload = valid_input()
+    payload["targetMinutes"] = 400
+    payload["policy"]["weekdayCaps"] = {}
+    payload["policy"]["dateOverrides"] = {"2042-03-03": 300}
+
+    result = plan_month(payload)
+    by_date = {day["date"]: day for day in result["days"]}
+
+    assert by_date["2042-03-03"]["plannedWorkMinutes"] == 300
+    assert by_date["2042-03-03"]["plannedAdditionalMinutes"] == 180
+    assert by_date["2042-03-07"]["plannedAdditionalMinutes"] == 40
+    assert result["gapMinutes"] == 0
+
+
 def test_satisfied_target_allocates_nothing():
     payload = valid_input()
     payload["targetMinutes"] = 120
