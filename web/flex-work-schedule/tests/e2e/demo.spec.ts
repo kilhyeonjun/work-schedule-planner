@@ -159,6 +159,9 @@ test('date override requires preview before local save and exposes reset', async
   plan.plannedTotalMinutes = 123;
   await page.locator('.cal-cell--plan').first().click();
   await expect(page.getByRole('button', {name: '기본 500'})).toBeVisible();
+  await expect(page.getByRole('button', {name: '이 날짜 고정'})).toBeVisible();
+  await page.getByRole('button', {name: '목표 맞추기에 사용'}).click();
+  await expect(page.getByText('이전/선호값: 목표 맞추기에 사용 (최종 배정 보장 안 함)')).toBeVisible();
   await page.getByRole('button', {name: '긴 날 719'}).click();
   await page.getByRole('button', {name: '출퇴근·휴게'}).click();
   await expect(page.getByLabel('출근')).toHaveValue('06:40');

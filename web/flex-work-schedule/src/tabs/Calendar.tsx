@@ -29,13 +29,15 @@ export function CalendarTab(props: TabProps) {
   const [startTime, setStartTime] = useState('06:40');
   const [endTime, setEndTime] = useState('16:00');
   const [breakMinutes, setBreakMinutes] = useState(60);
+  const [locked, setLocked] = useState(true);
   const [previewedMinutes, setPreviewedMinutes] = useState<number>();
   const [overrideState, setOverrideState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [overrideMessage, setOverrideMessage] = useState('');
   const [previewPayload, setPreviewPayload] = useState<MonthPayload | null>(null);
+  const [previewResult, setPreviewResult] = useState<{selectedLocked?: boolean; adjustments?: {date: string; beforeMinutes: number; afterMinutes: number}[]; targetMinutes?: number; plannedTotalMinutes?: number; gapMinutes?: number; reason?: string | null} | null>(null);
   const [previewToken, setPreviewToken] = useState('');
-  useEffect(() => { setPreviewedMinutes(undefined); setPreviewToken(''); setOverrideState('idle'); setOverrideMessage(''); }, [selectedDate]);
-  useEffect(() => { setPreviewPayload(null); }, [payload]);
+  useEffect(() => { setPreviewedMinutes(undefined); setPreviewToken(''); setPreviewResult(null); setOverrideState('idle'); setOverrideMessage(''); }, [selectedDate]);
+  useEffect(() => { setPreviewPayload(null); setPreviewResult(null); }, [payload]);
   const displayedPayload = previewPayload || payload;
   React.useEffect(() => {
     // 모바일: 그리드 아래 상세로 스크롤. 데스크톱 sticky는 이미 뷰포트 안 → no-op
@@ -174,8 +176,8 @@ export function CalendarTab(props: TabProps) {
   const windowMinutes = Math.max(0, clock(endTime) - clock(startTime) - breakMinutes);
   const editingMinutes = editMode === 'window' ? windowMinutes : durationHours * 60 + durationRemainder;
   const validWindow = editMode !== 'window' || editingMinutes === 0 || (editingMinutes >= 285 && editingMinutes <= 719 && clock(startTime) <= 11 * 60 && clock(endTime) >= 16 * 60);
-  const validOverride = (editingMinutes === 0 || (editingMinutes >= 285 && editingMinutes <= 719)) && validWindow;
-  const choosePreset = (minutes: number, start: string, end: string, rest: number) => { setDurationHours(Math.floor(minutes / 60)); setDurationRemainder(minutes % 60); setStartTime(start); setEndTime(end); setBreakMinutes(rest); setPreviewedMinutes(undefined); };
+  const validOverride = (editingMinutes === 0 || (editingMinutes >= 285 && editingMinutes <= 719)) && validWindow && (locked || editingMinutes > 0);
+  const choosePreset = (minutes: number, start: string, end: string, rest: number) => { setDurationHours(Math.floor(minutes / 60)); setDurationRemainder(minutes % 60); setStartTime(start); setEndTime(end); setBreakMinutes(rest); if (minutes === 0) setLocked(true); setPreviewedMinutes(undefined); };
   const overrideRequest = async (action: 'preview' | 'save' | 'reset') => {
     if (!selectedDate) return;
     setOverrideState('loading');
@@ -187,15 +189,17 @@ export function CalendarTab(props: TabProps) {
         method: action === 'reset' ? 'DELETE' : 'POST', cache: 'no-store',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({date: selectedDate, target: selected, normal: settings.normalDayMinutes, long: settings.longDayMinutes, short: settings.shortDayMinutes,
-          ...(action === 'reset' ? {} : {minutes: editingMinutes, ...(editMode === 'window' && editingMinutes > 0 ? {window: {start: startTime, end: endTime, breakMinutes}} : {})}), ...(action === 'save' ? {previewToken} : {})}),
+          ...(action === 'reset' ? {} : {minutes: editingMinutes, locked, ...(editMode === 'window' && editingMinutes > 0 ? {window: {start: startTime, end: endTime, breakMinutes}} : {})}), ...(action === 'save' ? {previewToken} : {})}),
       });
       const body = await response.json();
       if (!response.ok || !body.ok || !body.preview) throw new Error(body.error || `HTTP ${response.status}`);
       setPreviewPayload(body.preview);
+      setPreviewResult({selectedLocked: body.selectedLocked, adjustments: body.adjustments, targetMinutes: body.targetMinutes, plannedTotalMinutes: body.plannedTotalMinutes, gapMinutes: body.gapMinutes, reason: body.reason});
       setPreviewToken(action === 'preview' ? String(body.previewToken || '') : '');
       setPreviewedMinutes(action === 'preview' ? editingMinutes : undefined);
       setOverrideState('success');
-      setOverrideMessage(action === 'preview' ? '미리보기 완료 · 저장 전까지 Flex에는 기록되지 않습니다.' : action === 'save' ? '로컬 계획을 저장했습니다. Flex에는 기록되지 않습니다.' : '이 날짜만 기본 계획으로 되돌렸습니다.');
+      const incomplete = Number(body.gapMinutes || 0) > 0;
+      setOverrideMessage(incomplete ? `미리보기 결과: 목표 미달 ${fmt(Number(body.gapMinutes))} · ${body.reason || '제약 확인 필요'}` : action === 'preview' ? '미리보기 완료 · 저장 전까지 Flex에는 기록되지 않습니다.' : action === 'save' ? '로컬 계획을 저장했습니다. Flex에는 기록되지 않습니다.' : '이 날짜만 기본 계획으로 되돌렸습니다.');
     } catch (error) {
       setOverrideState('error');
       setOverrideMessage(String(error instanceof Error ? error.message : error));
@@ -306,6 +310,10 @@ export function CalendarTab(props: TabProps) {
                       <button type="button" className={editMode === 'duration' ? 'is-selected' : ''} onClick={() => { setEditMode('duration'); setPreviewedMinutes(undefined); }}>시간·분</button>
                       <button type="button" className={editMode === 'window' ? 'is-selected' : ''} onClick={() => { setEditMode('window'); setPreviewedMinutes(undefined); }}>출퇴근·휴게</button>
                     </div>
+                    <div className="cal-override__choices" role="group" aria-label="계획 고정 방식">
+                      <button type="button" aria-pressed={locked} style={{minHeight: 44}} className={locked ? 'is-selected' : ''} onClick={() => { setLocked(true); setPreviewedMinutes(undefined); }}>이 날짜 고정</button>
+                      <button type="button" aria-pressed={!locked} style={{minHeight: 44}} className={!locked ? 'is-selected' : ''} onClick={() => { if (editingMinutes > 0) setLocked(false); setPreviewedMinutes(undefined); }}>목표 맞추기에 사용</button>
+                    </div>
                     {editMode === 'duration' ? (
                       <div className="cal-override__choices">
                         <label>시간 <input aria-label="시간" type="number" min="0" max="11" value={durationHours} onChange={event => { setDurationHours(Number(event.target.value)); setPreviewedMinutes(undefined); }} /></label>
@@ -318,8 +326,10 @@ export function CalendarTab(props: TabProps) {
                         <label>휴게(분) <input aria-label="휴게 분" type="number" min="0" max="180" value={breakMinutes} onChange={event => { setBreakMinutes(Number(event.target.value)); setPreviewedMinutes(undefined); }} /></label>
                       </div>
                     )}
-                    <div className="cal-override__summary mono">계산 {fmt(editingMinutes)}{editMode === 'window' && ` · ${startTime}–${endTime} · 휴게 ${breakMinutes}분`}</div>
-                    {!validOverride && <span className="is-error" role="alert">휴무(0) 또는 4:45–11:59, 출근 11:00 이전·퇴근 16:00 이후여야 합니다.</span>}
+                    <div className="cal-override__summary mono">계산 {fmt(editingMinutes)} · {locked ? '이 날짜 고정' : '이전/선호값: 목표 맞추기에 사용 (최종 배정 보장 안 함)'}{editMode === 'window' && ` · ${startTime}–${endTime} · 휴게 ${breakMinutes}분`}</div>
+                    {editingMinutes === 0 && !locked && <span className="is-error" role="alert">휴무 0은 고정만 가능합니다.</span>}
+                    {previewResult && <div className="cal-override__summary mono" aria-live="polite">고정 상태 {previewResult.selectedLocked ? '고정' : '목표 맞추기'} · 목표 {fmt(previewResult.targetMinutes)} · 계획 {fmt(previewResult.plannedTotalMinutes)} · 갭 {fmt(previewResult.gapMinutes)}{previewResult.reason && ` · ${previewResult.reason}`}{(previewResult.adjustments || []).map(item => <span key={item.date}><br />{md(item.date)} {fmt(item.beforeMinutes)} → {fmt(item.afterMinutes)}</span>)}</div>}
+                    {!validOverride && <span className="is-error" role="alert">휴무(0)는 고정만 가능하며, 근무는 4:45–11:59, 출근 11:00 이전·퇴근 16:00 이후여야 합니다.</span>}
                     <div className="cal-override__actions">
                       <button type="button" onClick={() => overrideRequest('preview')} disabled={overrideState === 'loading' || !validOverride}>미리보기</button>
                       <button type="button" onClick={() => overrideRequest('save')} disabled={overrideState === 'loading' || !validOverride || !previewToken || previewedMinutes !== editingMinutes}>로컬 저장</button>

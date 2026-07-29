@@ -6,7 +6,7 @@ export default defineConfig({
   expect: {timeout: 10_000},
   use: {baseURL: 'http://127.0.0.1:18787', trace: 'retain-on-failure'},
   webServer: {
-    command: 'uv run python scripts/demo_server.py --port 18787',
+    command: 'VITE_BASE_PATH=/demo/ npm --prefix web/flex-work-schedule run build -- --outDir dist-demo && uv run python scripts/demo_server.py --port 18787',
     cwd: '../..',
     url: 'http://127.0.0.1:18787/demo/',
     reuseExistingServer: false,
