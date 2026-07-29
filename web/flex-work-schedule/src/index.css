@@ -90,7 +90,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
 .sidebar__sub { color: var(--mut); font-size: 11px; margin-top: 4px; }
 .sidebar__nav { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; }
 .sidebar__item {
-  display: flex; align-items: center; gap: 10px; text-align: left;
+  display: flex; align-items: center; gap: 10px; min-height: 44px; text-align: left;
   padding: 9px 12px; border-radius: 8px; color: var(--mut); font-size: 13.5px;
   border-left: 2px solid transparent;
 }
@@ -134,13 +134,13 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
 .statusbar__crumb .accent { color: var(--indigo); font-family: var(--font-mono); }
 .statusbar__nav { display: flex; gap: 6px; align-items: center; }
 .statusbar__navbtn {
-  min-width: 28px; height: 26px; border: 1px solid var(--line); border-radius: 7px;
+  min-width: 44px; min-height: 44px; border: 1px solid var(--line); border-radius: 7px;
   color: var(--mut); font-size: 13px; padding: 0 8px;
 }
 .statusbar__navbtn:hover { color: var(--ink); border-color: var(--mut); }
 .statusbar__spacer { margin-left: auto; }
 .statusbar__chip {
-  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--mut);
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-size: 12px; color: var(--mut);
   border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; background: var(--panel);
 }
 .statusbar__chip b { color: var(--ink); font-weight: 600; }
