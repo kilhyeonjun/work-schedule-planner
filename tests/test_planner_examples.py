@@ -284,6 +284,21 @@ def test_date_override_is_fixed_and_redistributes_remaining_target():
     assert result["gapMinutes"] == 0
 
 
+def test_fixed_overrides_exceeding_target_remain_visible_as_over_target_conflict():
+    payload = valid_input()
+    payload["targetMinutes"] = 175
+    payload["policy"]["weekdayCaps"] = {}
+    payload["policy"]["dateOverrides"] = {"2042-03-03": 300}
+
+    result = plan_month(payload)
+
+    assert result["status"] == "over_target"
+    assert result["plannedAdditionalMinutes"] == 180
+    assert result["projectedRecognizedMinutes"] == 360
+    assert result["gapMinutes"] == 0
+    assert result["overTargetMinutes"] == 185
+
+
 def test_satisfied_target_allocates_nothing():
     payload = valid_input()
     payload["targetMinutes"] = 120

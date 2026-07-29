@@ -37,7 +37,7 @@ export type TodayAction = {
 export type Plan = {
   status?: string; targetMinutes?: number; recognizedMinutes?: number;
   sourceRecognizedMinutes?: number; inProgressRecognizedMinutes?: number;
-  remainingMinutes?: number; plannedTotalMinutes?: number; gapMinutes?: number;
+  remainingMinutes?: number; plannedTotalMinutes?: number; forecastMinutes?: number; gapMinutes?: number; overTargetMinutes?: number; conflictReason?: string;
   projectedOverFixedMinutes?: number; projectedExtraPayPreTaxKrw?: number; projectedExtraPayAfterTaxKrw?: number;
   summary?: {plannedDays?: number; longDays?: number; normalDays?: number; shortDays?: number; adjustDays?: number;
     averageDailyMinutes?: number; weekly?: WeeklyLoad[]};

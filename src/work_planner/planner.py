@@ -205,10 +205,9 @@ def _allocate(payload: dict[str, Any]) -> tuple[Any, dict[str, int]]:
         fixed_total += fixed
         weekly_work[day.week_key] = weekly_work.get(day.week_key, 0) + fixed
         daily_caps[day.date] = 0
-    if fixed_total > requested:
-        raise ValueError("date overrides exceed the remaining target")
-
-    remaining, activated = _minimum_activation(month, daily_caps, weekly_work, requested - fixed_total)
+    # Fixed local commitments are authoritative even when they exceed the
+    # selected target; the caller must surface the resulting conflict.
+    remaining, activated = _minimum_activation(month, daily_caps, weekly_work, max(0, requested - fixed_total))
     for day in month.days:
         if day.date not in activated:
             continue
@@ -225,8 +224,14 @@ def plan_month(payload: dict[str, Any]) -> dict[str, Any]:
     month, allocated = _allocate(payload)
     baseline = sum(day.recognized_minutes for day in month.days)
     planned_additional = sum(allocated.values())
-    gap = max(0, month.target_minutes - baseline - planned_additional)
-    if month.target_minutes <= baseline:
+    projected = baseline + planned_additional
+    gap = max(0, month.target_minutes - projected)
+    raw_over_target = max(0, projected - month.target_minutes)
+    has_fixed_commitment = bool(month.policy.date_overrides) and planned_additional > 0
+    over_target = raw_over_target if has_fixed_commitment else 0
+    if over_target:
+        status = "over_target"
+    elif month.target_minutes <= baseline:
         status = "satisfied"
     elif gap:
         status = "insufficient_slots"
@@ -267,8 +272,9 @@ def plan_month(payload: dict[str, Any]) -> dict[str, Any]:
         "targetMinutes": month.target_minutes,
         "recognizedBaselineMinutes": baseline,
         "plannedAdditionalMinutes": planned_additional,
-        "projectedRecognizedMinutes": baseline + planned_additional,
+        "projectedRecognizedMinutes": projected,
         "gapMinutes": gap,
+        "overTargetMinutes": over_target,
         "constraints": constraints,
         "explanation": explain_result(status, gap),
         "days": days,

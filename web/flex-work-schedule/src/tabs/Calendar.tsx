@@ -34,7 +34,7 @@ export function CalendarTab(props: TabProps) {
   const [overrideState, setOverrideState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [overrideMessage, setOverrideMessage] = useState('');
   const [previewPayload, setPreviewPayload] = useState<MonthPayload | null>(null);
-  const [previewResult, setPreviewResult] = useState<{selectedLocked?: boolean; adjustments?: {date: string; beforeMinutes: number; afterMinutes: number}[]; targetMinutes?: number; plannedTotalMinutes?: number; gapMinutes?: number; reason?: string | null} | null>(null);
+  const [previewResult, setPreviewResult] = useState<{selectedLocked?: boolean; adjustments?: {date: string; beforeMinutes: number; afterMinutes: number}[]; targetMinutes?: number; plannedTotalMinutes?: number; gapMinutes?: number; overTargetMinutes?: number; reason?: string | null} | null>(null);
   const [previewToken, setPreviewToken] = useState('');
   useEffect(() => { setPreviewedMinutes(undefined); setPreviewToken(''); setPreviewResult(null); setOverrideState('idle'); setOverrideMessage(''); }, [selectedDate]);
   useEffect(() => { setPreviewPayload(null); setPreviewResult(null); }, [payload]);
@@ -194,7 +194,7 @@ export function CalendarTab(props: TabProps) {
       const body = await response.json();
       if (!response.ok || !body.ok || !body.preview) throw new Error(body.error || `HTTP ${response.status}`);
       setPreviewPayload(body.preview);
-      setPreviewResult({selectedLocked: body.selectedLocked, adjustments: body.adjustments, targetMinutes: body.targetMinutes, plannedTotalMinutes: body.plannedTotalMinutes, gapMinutes: body.gapMinutes, reason: body.reason});
+      setPreviewResult({selectedLocked: body.selectedLocked, adjustments: body.adjustments, targetMinutes: body.targetMinutes, plannedTotalMinutes: body.plannedTotalMinutes, gapMinutes: body.gapMinutes, overTargetMinutes: body.overTargetMinutes, reason: body.reason});
       setPreviewToken(action === 'preview' ? String(body.previewToken || '') : '');
       setPreviewedMinutes(action === 'preview' ? editingMinutes : undefined);
       setOverrideState('success');
