@@ -1,6 +1,6 @@
 import './calendar.css';
-import React from 'react';
-import {DayRow, PlannerDay, TabProps, dayTypeLabel, fmt, kindLabel, pad, todayIso} from '../lib';
+import React, {useEffect, useState} from 'react';
+import {DayRow, MonthPayload, PlannerDay, TabProps, dayTypeLabel, fmt, kindLabel, nowDate, pad, todayIso} from '../lib';
 import {Card, Chip, Skel} from '../ui';
 
 const MAX_DAY = 719; // 11:59 — 히트맵/채움 스케일 (comp 기준)
@@ -20,15 +20,24 @@ const recMin = (d: DayRow) => d.recognized_minutes ?? (d.work_minutes || 0) + (d
 const typeLabels = (s?: string) => String(s || '').split(',').map(t => dayTypeLabel(t.trim())).filter(Boolean);
 
 export function CalendarTab(props: TabProps) {
-  const {payload, loading, selectedDate, setSelectedDate, year, month} = props;
+  const {payload, loading, selected, settings, selectedDate, setSelectedDate, year, month} = props;
   const today = todayIso();
   const detailRef = React.useRef<HTMLDivElement>(null);
+  const [overrideMinutes, setOverrideMinutes] = useState(500);
+  const [previewedMinutes, setPreviewedMinutes] = useState<number>();
+  const [overrideState, setOverrideState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [overrideMessage, setOverrideMessage] = useState('');
+  const [previewPayload, setPreviewPayload] = useState<MonthPayload | null>(null);
+  const [previewToken, setPreviewToken] = useState('');
+  useEffect(() => { setPreviewedMinutes(undefined); setPreviewToken(''); setOverrideState('idle'); setOverrideMessage(''); }, [selectedDate]);
+  useEffect(() => { setPreviewPayload(null); }, [payload]);
+  const displayedPayload = previewPayload || payload;
   React.useEffect(() => {
     // 모바일: 그리드 아래 상세로 스크롤. 데스크톱 sticky는 이미 뷰포트 안 → no-op
     if (selectedDate) detailRef.current?.scrollIntoView({behavior: 'smooth', block: 'nearest'});
   }, [selectedDate]);
 
-  if (!payload) {
+  if (!displayedPayload) {
     return (
       <div className="cal-tab">
         <div className="cal-main">
@@ -44,8 +53,8 @@ export function CalendarTab(props: TabProps) {
     );
   }
 
-  const rows = new Map<string, DayRow>((payload.days || []).map(d => [d.date, d]));
-  const plans = new Map<string, PlannerDay>((payload.planner?.plan?.days || []).map(d => [d.date, d]));
+  const rows = new Map<string, DayRow>((displayedPayload.days || []).map(d => [d.date, d]));
+  const plans = new Map<string, PlannerDay>((displayedPayload.planner?.plan?.days || []).map(d => [d.date, d]));
 
   // 월 그리드 (월요일 시작, 앞뒤는 타월 자리)
   const lead = (new Date(year, month - 1, 1).getDay() + 6) % 7;
@@ -69,14 +78,14 @@ export function CalendarTab(props: TabProps) {
   const weeks: CellInfo[][] = [];
   for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
 
-  const planResult = payload.planner?.plan;
+  const planResult = displayedPayload.planner?.plan;
   const actualTotal = cells.reduce((s, c) => s + (c.inMonth && c.row ? Number(c.row.work_minutes || 0) : 0), 0);
   const confTotal = cells.reduce((s, c) => s + (c.inMonth && c.row ? recMin(c.row) : 0), 0);
   const planTotal = Number(planResult?.plannedTotalMinutes || 0);
   const recognizedTotal = Number(planResult?.recognizedMinutes ?? confTotal);
   const remainingTotal = Number(planResult?.remainingMinutes || 0);
   const forecastTotal = recognizedTotal + planTotal;
-  const nextPlan = (payload.planner?.plan?.days || []).find(p => p.date > today && (p.plannedMinutes || 0) > 0);
+  const nextPlan = (displayedPayload.planner?.plan?.days || []).find(p => p.date > today && (p.plannedMinutes || 0) > 0);
 
   const renderCell = (c: CellInfo) => {
     if (c.state === 'out') {
@@ -154,6 +163,32 @@ export function CalendarTab(props: TabProps) {
   const selPlan = selectedDate ? plans.get(selectedDate) : undefined;
   const detailHybrid = Boolean(selectedDate === today && selRow && selPlan && recMin(selRow) > 0);
   const detailDone = Boolean(selRow && (recMin(selRow) > 0 || !selPlan));
+  const overrideEditable = Boolean(selPlan && !detailDone && selectedDate && selectedDate >= today && year === nowDate().getFullYear() && month === nowDate().getMonth() + 1);
+  const overrideRequest = async (action: 'preview' | 'save' | 'reset') => {
+    if (!selectedDate) return;
+    setOverrideState('loading');
+    setOverrideMessage('');
+    try {
+      const base = window.location.pathname.startsWith('/demo') ? '/demo/api/planner/overrides' : '/api/planner/overrides';
+      const path = action === 'preview' ? `${base}/preview` : base;
+      const response = await fetch(path, {
+        method: action === 'reset' ? 'DELETE' : 'POST', cache: 'no-store',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({date: selectedDate, target: selected, normal: settings.normalDayMinutes, long: settings.longDayMinutes, short: settings.shortDayMinutes,
+          ...(action === 'reset' ? {} : {minutes: overrideMinutes}), ...(action === 'save' ? {previewToken} : {})}),
+      });
+      const body = await response.json();
+      if (!response.ok || !body.ok || !body.preview) throw new Error(body.error || `HTTP ${response.status}`);
+      setPreviewPayload(body.preview);
+      setPreviewToken(action === 'preview' ? String(body.previewToken || '') : '');
+      setPreviewedMinutes(action === 'preview' ? overrideMinutes : undefined);
+      setOverrideState('success');
+      setOverrideMessage(action === 'preview' ? '미리보기 완료 · 저장 전까지 Flex에는 기록되지 않습니다.' : action === 'save' ? '로컬 계획을 저장했습니다. Flex에는 기록되지 않습니다.' : '이 날짜만 기본 계획으로 되돌렸습니다.');
+    } catch (error) {
+      setOverrideState('error');
+      setOverrideMessage(String(error instanceof Error ? error.message : error));
+    }
+  };
   const kv = (k: string, v: React.ReactNode, zero = false, dot = false) => (
     <div className="cal-kv__row">
       {dot && <span className="cal-kv__dot" />}
@@ -240,6 +275,26 @@ export function CalendarTab(props: TabProps) {
                   {selPlan.plannedAdditionalMinutes != null && kv('추가 인정', fmt(selPlan.plannedAdditionalMinutes))}
                   {(selPlan.timeoffMinutes || 0) > 0 && kv('휴가', fmt(selPlan.timeoffMinutes), false, true)}
                 </div>
+                {overrideEditable && (
+                  <section className="cal-override" aria-label="날짜 계획 편집">
+                    <b>이 날짜만 로컬 계획 편집</b><span>Flex 실근무·휴가 기록은 변경하지 않습니다.</span>
+                    <div className="cal-override__choices">
+                      {[[500, '500분 보통'], [719, '719분 긴 날'], [0, '휴무']].map(([minutes, label]) => (
+                        <button key={String(minutes)} type="button" aria-label={String(label)} className={overrideMinutes === minutes ? 'is-selected' : ''}
+                          onClick={() => { setOverrideMinutes(Number(minutes)); setPreviewedMinutes(undefined); }}>{label}</button>
+                      ))}
+                      <label>직접 <input aria-label="직접 분" type="number" min="285" max="719" value={overrideMinutes || ''}
+                        onChange={event => { setOverrideMinutes(Number(event.target.value)); setPreviewedMinutes(undefined); }} /></label>
+                    </div>
+                    <div className="cal-override__actions">
+                      <button type="button" onClick={() => overrideRequest('preview')} disabled={overrideState === 'loading'}>미리보기</button>
+                      <button type="button" onClick={() => overrideRequest('save')} disabled={overrideState === 'loading' || !previewToken || previewedMinutes !== overrideMinutes}>로컬 저장</button>
+                      <button type="button" onClick={() => overrideRequest('reset')} disabled={overrideState === 'loading'}>이 날짜 초기화</button>
+                    </div>
+                    {overrideState === 'loading' && <span role="status">처리 중…</span>}
+                    {overrideMessage && <span className={overrideState === 'error' ? 'is-error' : 'is-success'} role={overrideState === 'error' ? 'alert' : 'status'}>{overrideMessage}</span>}
+                  </section>
+                )}
                 <div className="cal-detail__foot">계획 시뮬레이션 값입니다 · Flex에 기록되지 않음</div>
               </>
             ) : null}

@@ -145,3 +145,27 @@ test('mobile renders canonical bottom navigation without page overflow', async (
   await expect(page.locator('.tabbar')).toHaveJSProperty('inert', true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 });
+
+test('date override requires preview before local save and exposes reset', async ({page}) => {
+  await page.setViewportSize({width: 390, height: 844});
+  let preview: Record<string, unknown>;
+  await page.route('**/demo/api/planner/overrides**', route => route.fulfill({
+    contentType: 'application/json', body: JSON.stringify({ok: true, localOnly: true, preview, previewToken: 'demo-preview', overrides: {}}),
+  }));
+  const monthResponse = page.waitForResponse(response => response.url().includes('/demo/api/month?'));
+  await page.goto('/demo/?tab=calendar');
+  preview = await (await monthResponse).json() as Record<string, unknown>;
+  const plan = (preview.planner as {plan: {plannedTotalMinutes: number}}).plan;
+  plan.plannedTotalMinutes = 123;
+  await page.locator('.cal-cell--plan').first().click();
+  await expect(page.getByRole('button', {name: '500분 보통'})).toBeVisible();
+  await expect(page.getByRole('button', {name: '로컬 저장'})).toBeDisabled();
+  await page.getByRole('button', {name: '미리보기'}).click();
+  await expect(page.getByText('미리보기 완료 · 저장 전까지 Flex에는 기록되지 않습니다.')).toBeVisible();
+  await expect(page.locator('.cal-metrics')).toContainText('2:03');
+  await expect(page.getByRole('button', {name: '로컬 저장'})).toBeEnabled();
+  await page.getByRole('button', {name: '로컬 저장'}).click();
+  await expect(page.getByText('로컬 계획을 저장했습니다. Flex에는 기록되지 않습니다.')).toBeVisible();
+  await page.getByRole('button', {name: '이 날짜 초기화'}).click();
+  await expect(page.getByText('이 날짜만 기본 계획으로 되돌렸습니다.')).toBeVisible();
+});
