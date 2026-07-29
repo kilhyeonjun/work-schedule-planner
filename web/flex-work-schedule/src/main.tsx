@@ -3,7 +3,7 @@ import {createRoot} from 'react-dom/client';
 import './index.css';
 import {
   clampWorkSettings, initialSelectedDate, initialTab, initialTarget, initialWorkSettings,
-  nowDate, numParam, pad, syncUrl, useArchive, useMonthData, WorkSettings,
+  nowDate, numParam, pad, syncUrl, urlState, useArchive, useMonthData, WorkSettings,
 } from './lib';
 import {Card, Sidebar, StrategySwitcher, SyncChip, TabBar, TABS} from './ui';
 import {TodayTab} from './tabs/Today';
@@ -25,6 +25,12 @@ function App() {
   const [settings, setSettings] = useState<WorkSettings>(initialWorkSettings());
   const [selectedDate, setSelectedDate] = useState<string | undefined>(initialSelectedDate());
   const strategyBaseline = useRef<{target: number; settings: WorkSettings} | null>(null);
+  const historyMode = useRef<'push' | 'replace'>('replace');
+  const push = () => { historyMode.current = 'push'; };
+  const setUserTab = (value: string) => { push(); setTab(value); };
+  const setUserTarget = (value: number) => { push(); setTarget(value); };
+  const setUserSettings = (value: WorkSettings) => { push(); setSettings(value); };
+  const setUserSelectedDate = (value?: string) => { push(); setSelectedDate(value); };
 
   const {payload, loading, error: monthError, retry: retryMonth} = useMonthData(year, month, target, settings);
   const {archive, error: archiveError, retry: retryArchive} = useArchive();
@@ -46,9 +52,21 @@ function App() {
   }, [payload]);
 
   useEffect(() => {
-    syncUrl({year, month, tab, target, settings, selectedDate});
+    const mode = historyMode.current;
+    historyMode.current = 'replace';
+    syncUrl({year, month, tab, target, settings, selectedDate}, mode);
   }, [year, month, tab, target, selectedDate,
     settings.normalDayMinutes, settings.longDayMinutes, settings.shortDayMinutes]);
+  useEffect(() => {
+    const restore = () => {
+      const state = urlState(nowDate().getFullYear(), nowDate().getMonth() + 1);
+      historyMode.current = 'replace';
+      setYear(state.year); setMonth(state.month); setTab(state.tab); setTarget(state.target);
+      setSettings(state.settings); setSelectedDate(state.selectedDate);
+    };
+    window.addEventListener('popstate', restore);
+    return () => window.removeEventListener('popstate', restore);
+  }, []);
 
   const targetControlsEnabled = payload?.ui?.targetConfiguration?.enabled !== false;
   const archiveMode = payload?.ui?.archiveMode === true || !targetControlsEnabled;
@@ -59,6 +77,7 @@ function App() {
 
   const move = (d: number) => {
     const next = new Date(year, month - 1 + d, 1);
+    push();
     setYear(next.getFullYear());
     setMonth(next.getMonth() + 1);
     setSelectedDate(undefined);
@@ -66,6 +85,7 @@ function App() {
   const goCurrent = () => {
     const t = nowDate();
     if (year === t.getFullYear() && month === t.getMonth() + 1) return;
+    push();
     setYear(t.getFullYear());
     setMonth(t.getMonth() + 1);
     setSelectedDate(undefined);
@@ -79,15 +99,15 @@ function App() {
   const activeTab = visibleTabs.some(([k]) => k === tab) ? tab : visibleTabs[0][0];
 
   const tabProps = {
-    payload, loading, archive, selected, setTarget, archiveMode,
-    settings, setSettings,
-    selectedDate, setSelectedDate,
-    year, month, onSelectMonth: (y: number, m: number) => { setYear(y); setMonth(m); setSelectedDate(undefined); },
+    payload, loading, archive, selected, setTarget: setUserTarget, archiveMode,
+    settings, setSettings: setUserSettings,
+    selectedDate, setSelectedDate: setUserSelectedDate,
+    year, month, onSelectMonth: (y: number, m: number) => { push(); setYear(y); setMonth(m); setSelectedDate(undefined); },
   };
 
   return (
     <div className="shell">
-      <Sidebar tab={activeTab} setTab={setTab} tabs={visibleTabs} />
+      <Sidebar tab={activeTab} setTab={setUserTab} tabs={visibleTabs} />
       <div className="shell__main">
         <header className="statusbar">
           <span className="statusbar__crumb">
@@ -101,8 +121,8 @@ function App() {
           </span>
           <span className="statusbar__spacer" />
           {payload?.dataOrigin === 'synthetic' && <span className="statusbar__chip"><span className="dot dot--indigo" />합성 데이터</span>}
-          <StrategySwitcher payload={payload} selected={selected} setTarget={setTarget} enabled={targetControlsEnabled}
-            settings={settings} setSettings={setSettings} loading={loading} baseline={strategyBaseline.current} />
+          <StrategySwitcher payload={payload} selected={selected} setTarget={setUserTarget} enabled={targetControlsEnabled}
+            settings={settings} setSettings={setUserSettings} loading={loading} baseline={strategyBaseline.current} />
           <SyncChip payload={payload} archiveMode={archiveMode} />
         </header>
         <main className="content">
@@ -130,7 +150,7 @@ function App() {
           {(loading || payload) && activeTab === 'analysis' && <AnalysisTab {...tabProps} />}
           {(loading || payload) && activeTab === 'archive' && <RecordTab {...tabProps} />}
         </main>
-        <TabBar tab={activeTab} setTab={setTab} tabs={visibleTabs} />
+        <TabBar tab={activeTab} setTab={setUserTab} tabs={visibleTabs} />
       </div>
     </div>
   );

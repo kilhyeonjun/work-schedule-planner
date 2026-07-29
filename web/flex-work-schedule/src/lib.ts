@@ -140,32 +140,40 @@ export const clampWorkSettings = (s: WorkSettings): WorkSettings => {
 
 // ---------- URL state (backward-compatible params) ----------
 
-const initialParams = new URLSearchParams(window.location.search);
-export const numParam = (key: string, fallback: number) => {
-  const v = Number(initialParams.get(key));
-  return Number.isFinite(v) && v > 0 ? v : fallback;
+const params = () => new URLSearchParams(window.location.search);
+const numberParam = (query: URLSearchParams, key: string, fallback: number) => {
+  const value = Number(query.get(key));
+  return Number.isFinite(value) && value > 0 ? value : fallback;
 };
+export const numParam = (key: string, fallback: number) => numberParam(params(), key, fallback);
 export const initialTarget = () => {
-  const v = Number(initialParams.get('target'));
-  return Number.isFinite(v) && v > 0 ? v : undefined;
+  const value = Number(params().get('target'));
+  return Number.isFinite(value) && value > 0 ? value : undefined;
 };
-export const initialTab = () => initialParams.get('tab') || 'today';
-export const initialSelectedDate = () => initialParams.get('selectedDate') || undefined;
-export const initialWorkSettings = () => clampWorkSettings({
-  normalDayMinutes: numParam('normal', defaultWorkSettings.normalDayMinutes),
-  longDayMinutes: numParam('long', defaultWorkSettings.longDayMinutes),
-  shortDayMinutes: numParam('short', defaultWorkSettings.shortDayMinutes),
+export const initialTab = () => params().get('tab') || 'today';
+export const initialSelectedDate = () => params().get('selectedDate') || undefined;
+export const initialWorkSettings = () => {
+  const query = params();
+  return clampWorkSettings({
+    normalDayMinutes: numberParam(query, 'normal', defaultWorkSettings.normalDayMinutes),
+    longDayMinutes: numberParam(query, 'long', defaultWorkSettings.longDayMinutes),
+    shortDayMinutes: numberParam(query, 'short', defaultWorkSettings.shortDayMinutes),
+  });
+};
+export const urlState = (fallbackYear: number, fallbackMonth: number) => ({
+  year: numParam('year', fallbackYear), month: numParam('month', fallbackMonth), tab: initialTab(),
+  target: initialTarget(), settings: initialWorkSettings(), selectedDate: initialSelectedDate(),
 });
 
 export function syncUrl(state: {year: number; month: number; tab: string; target?: number;
-  settings: WorkSettings; selectedDate?: string}) {
+  settings: WorkSettings; selectedDate?: string}, mode: 'push' | 'replace' = 'replace') {
   const q = new URLSearchParams({year: String(state.year), month: String(state.month), tab: state.tab});
   if (state.target) q.set('target', String(state.target));
   q.set('normal', String(state.settings.normalDayMinutes));
   q.set('long', String(state.settings.longDayMinutes));
   q.set('short', String(state.settings.shortDayMinutes));
   if (state.selectedDate) q.set('selectedDate', state.selectedDate);
-  window.history.replaceState(null, '', `${window.location.pathname}?${q}`);
+  window.history[`${mode}State`](null, '', `${window.location.pathname}?${q}`);
 }
 
 // ---------- data hooks ----------
