@@ -7,7 +7,7 @@ import {Card, Skel} from '../ui';
 
 const BADGE: Record<string, string> = {target: '최소 기준', fixed_ot: '수당 기준선', max: '상한'};
 const EFFORT: Record<string, string> = {target: 'low', fixed_ot: 'mid', max: 'high'};
-const STATUS_KO: Record<string, string> = {planned: '배치 완료', satisfied: '이미 달성', insufficient_slots: '배치 부족', over_target: '고정 계획 충돌'};
+const STATUS_KO: Record<string, string> = {planned: '배치 완료', satisfied: '이미 달성', insufficient_slots: '배치 부족', over_target: '고정 계획 충돌', infeasible_locked_target: '고정 계획 충돌'};
 
 const md = (iso?: string) => (iso ? `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}` : '');
 const signed = (v: number) => `${v < 0 ? '-' : '+'}${fmt(Math.abs(v))}`;
@@ -207,10 +207,11 @@ export function PlanTab({payload, loading, selected, setTarget}: TabProps) {
           )}
         </Card>
 
-        {plan.status === 'over_target' && (
+        {/* 상태 이름 대신 백엔드가 보낸 충돌 근거로 판정 — 새 status가 생겨도 숨지 않음 */}
+        {(Boolean(plan.conflictReason) || (plan.overTargetMinutes || 0) > 0) && (
           <div className="plan-feas plan-feas--warn" role="alert">
             <span className="plan-feas__st">고정 계획 충돌</span>
-            <span className="plan-feas__msg">{plan.conflictReason}</span>
+            <span className="plan-feas__msg">{plan.conflictReason || `초과 ${fmt(plan.overTargetMinutes)}`}</span>
           </div>
         )}
         {/* 실현 가능성 배너 */}
@@ -269,7 +270,8 @@ export function PlanTab({payload, loading, selected, setTarget}: TabProps) {
                 </tr>
                 {days.map(d => {
                   const additional = d.plannedAdditionalMinutes ?? d.plannedMinutes ?? 0;
-                  cum += additional;
+                  const accounted = d.isToday ? d.plannedMinutes ?? additional : additional;
+                  cum += accounted;
                   const cls = [
                     (d.currentWorkedMinutes || 0) > 0 ? 'plan-tr--done' : '',
                     d.isToday ? 'plan-tr--today' : '',

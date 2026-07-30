@@ -364,10 +364,11 @@ export function CalendarTab(props: TabProps) {
             <span><i>목표 잔여</i><b>{fmt(remainingTotal)}</b></span>
             <span className={forecastTotal === Number(planResult?.targetMinutes || 0) ? 'is-ok' : ''}><i>예상 인정</i><b>{fmt(forecastTotal)}</b></span>
           </div>
-          {planResult?.status === 'over_target' && (
+          {/* 상태 이름 대신 백엔드가 보낸 충돌 근거로 판정 — 새 status가 생겨도 숨지 않음 */}
+          {planResult && (Boolean(planResult.conflictReason) || (planResult.overTargetMinutes || 0) > 0) && (
             <div className="plan-feas plan-feas--warn" role="alert">
               <span className="plan-feas__st">고정 계획 충돌</span>
-              <span className="plan-feas__msg">예상 {fmt(planResult.forecastMinutes)} · 초과 {fmt(planResult.overTargetMinutes)} · {planResult.conflictReason}</span>
+              <span className="plan-feas__msg">예상 {fmt(planResult.forecastMinutes)} · 초과 {fmt(planResult.overTargetMinutes)}{planResult.conflictReason ? ` · ${planResult.conflictReason}` : ''}</span>
             </div>
           )}
           {planResult?.status === 'insufficient_slots' && (
