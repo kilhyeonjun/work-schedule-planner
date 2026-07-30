@@ -10,7 +10,7 @@ export const nowDate = () => demoWindow.__DEMO_TODAY__ ? new Date(`${demoWindow.
 export type DayRow = {
   date: string; weekday?: string; day_type?: string; badge?: string;
   work_minutes?: number; recognized_minutes?: number; office_minutes?: number;
-  remote_minutes?: number; timeoff_minutes?: number; rest_minutes?: number; night_minutes?: number;
+  remote_minutes?: number; unknown_minutes?: number; timeoff_minutes?: number; rest_minutes?: number; night_minutes?: number;
   first_start?: string; last_end?: string; intervals?: string[]; notes?: string[];
   is_ongoing?: boolean; is_on_break?: boolean;
 };

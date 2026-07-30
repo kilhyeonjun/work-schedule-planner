@@ -260,6 +260,7 @@ export function CalendarTab(props: TabProps) {
                   {kv('실근무', fmt(selRow.work_minutes), !(selRow.work_minutes))}
                   {kv('사무실', fmt(selRow.office_minutes), !(selRow.office_minutes))}
                   {kv('재택', fmt(selRow.remote_minutes), !(selRow.remote_minutes))}
+                  {kv('추가 근무', fmt(selRow.unknown_minutes), !(selRow.unknown_minutes))}
                   {kv('휴게', fmt(selRow.rest_minutes), !(selRow.rest_minutes))}
                   {kv('야간', fmt(selRow.night_minutes), !(selRow.night_minutes))}
                   {(selRow.timeoff_minutes || 0) > 0 && kv('휴가', fmt(selRow.timeoff_minutes), false, true)}
