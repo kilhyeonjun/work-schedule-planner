@@ -15,6 +15,13 @@ from .feasibility import (
 from .model import parse_work_month
 
 
+class InfeasiblePlanError(Exception):
+    """Raised when a day's mandatory minimum exceeds its own daily cap."""
+    def __init__(self, metadata: dict[str, Any]):
+        self.metadata = metadata
+        super().__init__(metadata.get("reason", "infeasible"))
+
+
 def _bit_indexes(bits: int):
     while bits:
         lowest = bits & -bits
@@ -186,6 +193,17 @@ def _minimum_activation(
 
 def _allocate(payload: dict[str, Any]) -> tuple[Any, dict[str, int]]:
     month = parse_work_month(payload)
+    
+    # Input validation: minWorkMinutes must not exceed maxWorkMinutes
+    for day in month.days:
+        if day.availability.min_work_minutes > day.availability.max_work_minutes:
+            raise InfeasiblePlanError({
+                "reason": "invalid_availability",
+                "date": day.date,
+                "min_work_minutes": day.availability.min_work_minutes,
+                "max_work_minutes": day.availability.max_work_minutes,
+            })
+    
     allocated = {day.date: 0 for day in month.days}
     baseline = sum(day.recognized_minutes for day in month.days)
     requested = max(0, month.target_minutes - baseline)
@@ -227,7 +245,48 @@ def _allocate(payload: dict[str, Any]) -> tuple[Any, dict[str, int]]:
 
 
 def plan_month(payload: dict[str, Any]) -> dict[str, Any]:
-    month, allocated = _allocate(payload)
+    try:
+        month, allocated = _allocate(payload)
+    except InfeasiblePlanError as e:
+        month = parse_work_month(payload)
+        baseline = sum(day.recognized_minutes for day in month.days)
+        # Return full day objects with zero allocation for compatibility
+        days = []
+        for day in month.days:
+            cap = daily_work_cap(day, month.policy)
+            days.append({
+                "date": day.date,
+                "weekday": day.weekday,
+                "week": day.week_key,
+                "dayType": day.day_type,
+                "workedMinutes": day.worked_minutes,
+                "recognizedMinutes": day.recognized_minutes,
+                "leaveMinutes": day.leave_minutes,
+                "plannedAdditionalMinutes": 0,
+                "plannedWorkMinutes": day.worked_minutes,
+                "projectedRecognizedMinutes": day.recognized_minutes,
+                "dailyWorkCapMinutes": cap,
+                "reasons": explain_day(day, 0, cap),
+            })
+        return {
+            "dataOrigin": month.data_origin,
+            "generator": month.generator,
+            "period": month.period,
+            "timezone": month.timezone,
+            "algorithm": {"name": "deterministic-water-fill", "version": "1"},
+            "status": "infeasible",
+            "targetMinutes": month.target_minutes,
+            "recognizedBaselineMinutes": baseline,
+            "plannedAdditionalMinutes": 0,
+            "projectedRecognizedMinutes": baseline,
+            "gapMinutes": month.target_minutes - baseline if month.target_minutes > baseline else 0,
+            "overTargetMinutes": 0,
+            "infeasible": e.metadata,
+            "constraints": {},
+            "explanation": "Mandatory minimum work requirements exceed available capacity.",
+            "days": days,
+        }
+    
     baseline = sum(day.recognized_minutes for day in month.days)
     planned_additional = sum(allocated.values())
     projected = baseline + planned_additional
