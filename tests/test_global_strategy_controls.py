@@ -17,7 +17,7 @@ def test_strategy_controls_are_global_immediate_and_single_source():
     assert "1분 감소" in ui and "1분 증가" in ui
     assert "업데이트 중" in ui
     assert "settings={settings}" in main
-    assert "setSettings={setUserSettings}" in main
+    assert "setSettings: setUserSettings" in main
     assert "loading={loading}" in main
     assert "strategyBaseline" in main
     assert "draftSettings" not in main
