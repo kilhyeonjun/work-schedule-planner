@@ -1,6 +1,6 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
-  clampWorkSettings, defaultWorkSettings, elapsedSinceSync, fmt, MonthPayload, TargetOption, useNow, WorkSettings,
+  clampWorkSettings, defaultWorkSettings, elapsedSinceSync, fmt, MonthPayload, TargetAccounting, TargetOption, useNow, WorkSettings,
 } from './lib';
 
 export function Card({className = '', children}: {className?: string; children: React.ReactNode}) {
@@ -9,6 +9,23 @@ export function Card({className = '', children}: {className?: string; children: 
 
 export function Chip({className = '', children}: {className?: string; children: React.ReactNode}) {
   return <span className={`chip ${className}`}>{children}</span>;
+}
+
+export function TargetAccountingSummary({accounting}: {accounting?: TargetAccounting}) {
+  if (!accounting) return null;
+  return (
+    <div className="target-accounting mono" aria-label="160시간 목표 산정">
+      <span><i>전체 실근무</i><b>{fmt(accounting.actualWorkMinutes)}</b></span>
+      <span><i>160시간 목표 인정</i><b>{fmt(accounting.targetEligibleMinutes)}</b></span>
+      <span><i>재택 반영 대기</i><b>{fmt(accounting.deferredRemoteMinutes)}</b></span>
+      <span><i>미분류 근무</i><b>{fmt(accounting.excludedUnknownMinutes)}</b></span>
+      <small>{accounting.breakdownStatus === 'legacy_unclassified'
+        ? '근무 유형이 없는 이전 기록 · 목표 반영 구분 불가'
+        : accounting.minimumTargetSatisfied
+          ? '160시간 출근·휴가 기준 충족 · 재택 반영됨'
+          : `출근·휴가 ${fmt(accounting.remainingOfficeMinimumMinutes)} 추가 시 재택 반영`}</small>
+    </div>
+  );
 }
 
 export function Skel({className = ''}: {className?: string}) {

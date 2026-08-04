@@ -1,6 +1,6 @@
 import './today.css';
 import React from 'react';
-import {Card, Skel} from '../ui';
+import {Card, Skel, TargetAccountingSummary} from '../ui';
 import {
   DayRow, TabProps, dayTypeLabel, elapsedSinceSync, fmt, kindLabel, pad, todayIso, useNow,
 } from '../lib';
@@ -65,6 +65,7 @@ export function TodayTab(props: TabProps) {
 
   return (
     <div className={`today ${payload && loading ? 'is-refreshing' : ''}`}>
+      <TargetAccountingSummary accounting={plan?.accounting} />
       <div className="today-grid">
         <div className="today-col">
 
@@ -170,7 +171,7 @@ export function TodayTab(props: TabProps) {
                 <div><div className="today-ledger__k">퇴근</div><div className="mono today-ledger__v">{todayRow?.last_end || '—'}</div></div>
                 <div><div className="today-ledger__k">사무실</div><div className="mono today-ledger__v">{fmt(todayRow?.office_minutes)}</div></div>
                 <div><div className="today-ledger__k">원격</div><div className="mono today-ledger__v">{fmt(todayRow?.remote_minutes)}</div></div>
-                <div><div className="today-ledger__k">추가 근무</div><div className="mono today-ledger__v">{fmt(todayRow?.unknown_minutes)}</div></div>
+                <div><div className="today-ledger__k">미분류 근무</div><div className="mono today-ledger__v">{fmt(todayRow?.unknown_minutes)}</div></div>
                 <div><div className="today-ledger__k">휴게</div><div className="mono today-ledger__v">{fmt(todayRow?.rest_minutes)}</div></div>
               </div>
               <div className="today-ledger__ints">
@@ -206,7 +207,7 @@ export function TodayTab(props: TabProps) {
                 <span className="today-month__fill" style={{width: `${pct}%`}} />
               </div>
               <div className="today-month__stats">
-                <div><div className="today-month__k">인정 누적</div><div className="mono today-month__v is-acc">{fmt(recognized)}</div></div>
+                <div><div className="today-month__k">160시간 목표 인정</div><div className="mono today-month__v is-acc">{fmt(recognized)}</div></div>
                 <div><div className="today-month__k">남은 시간</div><div className="mono today-month__v">{fmt(plan?.remainingMinutes)}</div></div>
                 <div><div className="today-month__k">목표</div><div className="mono today-month__v">{fmt(target)}</div></div>
               </div>

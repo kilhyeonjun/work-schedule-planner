@@ -41,7 +41,16 @@ export type Plan = {
   projectedOverFixedMinutes?: number; projectedExtraPayPreTaxKrw?: number; projectedExtraPayAfterTaxKrw?: number;
   summary?: {plannedDays?: number; longDays?: number; normalDays?: number; shortDays?: number; adjustDays?: number;
     averageDailyMinutes?: number; weekly?: WeeklyLoad[]};
+  accounting?: TargetAccounting;
   days?: PlannerDay[]; feasibility?: Feasibility; todayAction?: TodayAction;
+};
+
+export type TargetAccounting = {
+  actualWorkMinutes: number; officeWorkMinutes: number | null; remoteWorkMinutes: number | null;
+  unknownWorkMinutes: number | null; paidRecognizedMinutes: number; sourceRecognizedMinutes: number;
+  targetEligibleMinutes: number; deferredRemoteMinutes: number; excludedUnknownMinutes: number;
+  minimumTargetMinutes: number; minimumTargetSatisfied: boolean; remainingOfficeMinimumMinutes: number;
+  breakdownStatus: 'complete' | 'legacy_unclassified';
 };
 
 export type WeeklyLoad = {

@@ -1,7 +1,7 @@
 import './record.css';
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {ArchiveMonth, DayRow, TabProps, dayTypeLabel, fmt, pad} from '../lib';
-import {Card, Chip, Skel} from '../ui';
+import {Card, Chip, Skel, TargetAccountingSummary} from '../ui';
 
 const PAGE_SIZE = 10;
 
@@ -71,6 +71,7 @@ export function RecordTab({payload, loading, archive, archiveMode, year, month, 
   const dv = payload.derived || {};
   const actualMinutes = currentTruth?.effectiveActualMinutes ?? dv.actualMinutes ?? 0;
   const recognizedMinutes = currentTruth?.effectiveRecognizedMinutes ?? dv.recognizedMinutes ?? 0;
+  const accounting = payload.planner?.plan?.accounting;
   const targetMinutes = currentTruth?.selectedTargetMinutes ?? dv.targetMinutes ?? 0;
   const workDays = payload.days.filter(d => (d.work_minutes || 0) > 0).length;
   const timeoffDays = payload.days.filter(d => (d.timeoff_minutes || 0) > 0).length;
@@ -145,7 +146,7 @@ export function RecordTab({payload, loading, archive, archiveMode, year, month, 
             <div className="rec-stat__s mono">{timeoffDays > 0 ? `사용 ${timeoffDays}일` : '인정 합계에 포함'}</div>
           </Card>
           <Card className="rec-stat rec-stat--total">
-            <div className="rec-stat__k">{archiveMode ? '확정 인정 합계' : '현재 인정 합계'}</div>
+            <div className="rec-stat__k">{archiveMode ? '확정 인정 합계' : '160시간 목표 인정'}</div>
             <div className="rec-stat__v mono">{fmt(recognizedMinutes)}</div>
             <div className="rec-stat__s mono">
               목표 {fmt(targetMinutes)} 대비{' '}
@@ -153,6 +154,7 @@ export function RecordTab({payload, loading, archive, archiveMode, year, month, 
             </div>
           </Card>
         </div>
+        <TargetAccountingSummary accounting={accounting} />
 
         <Card>
           <div className="rec-cardh">
@@ -195,8 +197,8 @@ export function RecordTab({payload, loading, archive, archiveMode, year, month, 
               <thead>
                 <tr>
                   <th>날짜</th><th>구분</th>
-                  <th className="r">인정</th><th className="r rec-col--secondary">사무실</th>
-                  <th className="r rec-col--secondary">재택</th><th className="r rec-col--secondary">휴가</th>
+                  <th className="r">Flex 원본 인정</th><th className="r rec-col--secondary">사무실</th>
+                  <th className="r rec-col--secondary">재택</th><th className="r rec-col--secondary">미분류</th><th className="r rec-col--secondary">휴가</th>
                   <th>출퇴근</th><th className="rec-col--secondary">비고</th>
                 </tr>
               </thead>
@@ -212,6 +214,7 @@ export function RecordTab({payload, loading, archive, archiveMode, year, month, 
                       ? <span className="rec-cred mono">{fmt(recMin(d))}</span> : dash}</td>
                     <td className="r rec-col--secondary">{d.office_minutes ? <span className="rec-sec mono">{fmt(d.office_minutes)}</span> : dash}</td>
                     <td className="r rec-col--secondary">{d.remote_minutes ? <span className="rec-sec mono">{fmt(d.remote_minutes)}</span> : dash}</td>
+                    <td className="r rec-col--secondary">{d.unknown_minutes ? <span className="rec-sec mono">{fmt(d.unknown_minutes)}</span> : dash}</td>
                     <td className="r rec-col--secondary">{d.timeoff_minutes ? <span className="rec-vac mono">{fmt(d.timeoff_minutes)}</span> : dash}</td>
                     <td>{d.first_start && d.last_end
                       ? <span className="rec-win mono">{d.first_start} – {d.last_end}</span> : dash}</td>
@@ -219,7 +222,7 @@ export function RecordTab({payload, loading, archive, archiveMode, year, month, 
                   </tr>
                 ))}
                 {rows.length === 0 && (
-                  <tr><td colSpan={8}><div className="rec-empty">확정 기록 없음</div></td></tr>
+                  <tr><td colSpan={9}><div className="rec-empty">확정 기록 없음</div></td></tr>
                 )}
               </tbody>
             </table>

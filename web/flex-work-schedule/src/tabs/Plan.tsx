@@ -3,7 +3,7 @@ import React, {useRef, useState} from 'react';
 import {
   fmt, kindLabel, krw, Plan, PlannerDay, Strategy, TabProps,
 } from '../lib';
-import {Card, Skel} from '../ui';
+import {Card, Skel, TargetAccountingSummary} from '../ui';
 
 const BADGE: Record<string, string> = {target: '최소 기준', fixed_ot: '수당 기준선', max: '상한'};
 const EFFORT: Record<string, string> = {target: 'low', fixed_ot: 'mid', max: 'high'};
@@ -190,14 +190,15 @@ export function PlanTab({payload, loading, selected, setTarget}: TabProps) {
           {strategy.message && <span className="plan-strip__msg">{strategy.message}</span>}
           <span className="plan-strip__stats">
             <span className="plan-tag">목표 <b>{fmt(plan.targetMinutes)}</b></span>
-            <span className="plan-tag">인정 <b>{fmt(plan.recognizedMinutes)}</b></span>
-            <span className="plan-tag">잔여 <b>{fmt(plan.remainingMinutes)}</b></span>
+            <span className="plan-tag">160시간 목표 인정 <b>{fmt(plan.recognizedMinutes)}</b></span>
+            <span className="plan-tag">선택 목표 잔여 <b>{fmt(plan.remainingMinutes)}</b></span>
             <span className="plan-tag">계획 <b>{fmt(plan.plannedTotalMinutes)}</b></span>
             <span className="plan-tag">예상 <b>{fmt(plan.forecastMinutes ?? ((plan.recognizedMinutes || 0) + (plan.plannedTotalMinutes || 0)))}</b></span>
             <span className="plan-tag">갭 <b>{fmt(plan.gapMinutes)}</b></span>
             {(plan.overTargetMinutes || 0) > 0 && <span className="plan-tag plan-tag--warn">초과 <b>{fmt(plan.overTargetMinutes)}</b></span>}
             <span className="plan-tag">세후 <b>+{krw(plan.projectedExtraPayAfterTaxKrw)}원</b></span>
           </span>
+          <TargetAccountingSummary accounting={plan.accounting} />
           {statutoryMax > 0 && (
             <span className="plan-strip__stats plan-strip__limits">
               <span className="plan-tag">실근무 법정 상한 <b>{fmt(statutoryMax)}</b></span>
@@ -265,7 +266,7 @@ export function PlanTab({payload, loading, selected, setTarget}: TabProps) {
               </thead>
               <tbody>
                 <tr className="plan-tr--base">
-                  <td colSpan={6}>현재 인정 누적 · 실근무와 유급휴가 포함</td>
+                  <td colSpan={6}>현재 160시간 목표 인정 · 출근과 유급휴가 기준</td>
                   <td className="plan-r"><span className="mono">{fmt(plan.recognizedMinutes)}</span></td>
                 </tr>
                 {days.map(d => {

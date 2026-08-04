@@ -1,7 +1,7 @@
 import './calendar.css';
 import React, {useEffect, useState} from 'react';
 import {DayRow, MonthPayload, PlannerDay, TabProps, dayTypeLabel, fmt, kindLabel, nowDate, pad, todayIso} from '../lib';
-import {Card, Chip, Skel} from '../ui';
+import {Card, Chip, Skel, TargetAccountingSummary} from '../ui';
 
 const MAX_DAY = 719; // 11:59 — 히트맵/채움 스케일 (comp 기준)
 const DOW = ['월', '화', '수', '목', '금', '토', '일'];
@@ -260,7 +260,7 @@ export function CalendarTab(props: TabProps) {
                   {kv('실근무', fmt(selRow.work_minutes), !(selRow.work_minutes))}
                   {kv('사무실', fmt(selRow.office_minutes), !(selRow.office_minutes))}
                   {kv('재택', fmt(selRow.remote_minutes), !(selRow.remote_minutes))}
-                  {kv('추가 근무', fmt(selRow.unknown_minutes), !(selRow.unknown_minutes))}
+                  {kv('미분류 근무', fmt(selRow.unknown_minutes), !(selRow.unknown_minutes))}
                   {kv('휴게', fmt(selRow.rest_minutes), !(selRow.rest_minutes))}
                   {kv('야간', fmt(selRow.night_minutes), !(selRow.night_minutes))}
                   {(selRow.timeoff_minutes || 0) > 0 && kv('휴가', fmt(selRow.timeoff_minutes), false, true)}
@@ -358,12 +358,13 @@ export function CalendarTab(props: TabProps) {
             <span className="cal-card__sum mono">목표 <b>{fmt(planResult?.targetMinutes)}</b></span>
           </div>
           <div className="cal-metrics mono">
-            <span><i>실근무 누적</i><b>{fmt(actualTotal)}</b></span>
-            <span><i>인정 누적</i><b>{fmt(recognizedTotal)}</b></span>
+            <span><i>전체 실근무</i><b>{fmt(actualTotal)}</b></span>
+            <span><i>160시간 목표 인정</i><b>{fmt(recognizedTotal)}</b></span>
             <span><i>계획 배정</i><b>{fmt(planTotal)}</b></span>
             <span><i>목표 잔여</i><b>{fmt(remainingTotal)}</b></span>
             <span className={forecastTotal === Number(planResult?.targetMinutes || 0) ? 'is-ok' : ''}><i>예상 인정</i><b>{fmt(forecastTotal)}</b></span>
           </div>
+          <TargetAccountingSummary accounting={planResult?.accounting} />
           {/* 상태 이름 대신 백엔드가 보낸 충돌 근거로 판정 — 새 status가 생겨도 숨지 않음 */}
           {planResult && (Boolean(planResult.conflictReason) || (planResult.overTargetMinutes || 0) > 0) && (
             <div className="plan-feas plan-feas--warn" role="alert">

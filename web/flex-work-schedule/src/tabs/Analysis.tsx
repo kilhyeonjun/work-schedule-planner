@@ -1,7 +1,7 @@
 import './analysis.css';
 import React from 'react';
 import {Comparison, fmt, krw, pad, TabProps, todayIso} from '../lib';
-import {Card, Skel} from '../ui';
+import {Card, Skel, TargetAccountingSummary} from '../ui';
 
 const isWarnRow = (c: Comparison) => {
   const f = c.feasibility;
@@ -46,11 +46,21 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
 
   // ---- burn-up geometry (comp: viewBox 750x292, plot x 40..730, y 250..30) ----
   const actualPts: {day: number; cum: number}[] = [];
-  let cum = 0;
+  const accounting = plan?.accounting;
+  let office = 0;
+  let remote = 0;
+  let paid = 0;
+  let legacyRecognized = 0;
   for (const row of days) {
     if (row.date > today) break;
-    cum += row.recognized_minutes || 0;
-    actualPts.push({day: Number(row.date.slice(8, 10)), cum});
+    office += row.office_minutes || 0;
+    remote += row.remote_minutes || 0;
+    paid += row.timeoff_minutes || 0;
+    legacyRecognized += row.recognized_minutes || 0;
+    const eligible = accounting?.breakdownStatus === 'complete'
+      ? office + paid + (office + paid >= accounting.minimumTargetMinutes ? remote : 0)
+      : legacyRecognized;
+    actualPts.push({day: Number(row.date.slice(8, 10)), cum: Math.min(eligible, recognized)});
   }
   const last = actualPts[actualPts.length - 1];
 
@@ -107,12 +117,13 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
         {/* burn-up */}
         <Card className="an-card">
           <div className="an-card-h">
-            <span className="an-t">누적 인정 추이 · {year}-{pad(month)}</span>
+            <span className="an-t">160시간 목표 인정 추이 · {year}-{pad(month)}</span>
             <span className="an-sum">
               <b>{fmt(recognized)}</b>&nbsp;/&nbsp;{fmt(selTarget)}&nbsp;·&nbsp;달성&nbsp;<b>{pct}%</b>
               &nbsp;·&nbsp;남은&nbsp;<b>{fmt(remaining)}</b>&nbsp;·&nbsp;근무일&nbsp;<b>{workedRows.length}일</b>
             </span>
           </div>
+          <TargetAccountingSummary accounting={plan?.accounting} />
           <div className="an-card-b">
             <svg className="an-chart" viewBox="0 0 750 292" role="img"
               aria-label={`${month}월 1일부터 ${lastDay}일까지 누적 인정 시간과 목표 페이스 비교`}>
