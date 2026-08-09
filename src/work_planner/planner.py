@@ -224,22 +224,19 @@ def _allocate(payload: dict[str, Any]) -> tuple[Any, dict[str, int]]:
         weekly_work[day.week_key] = weekly_work.get(day.week_key, 0) + fixed
         daily_caps[day.date] = 0
 
-    # Seed ALL mandatory minimums (days with minWorkMinutes > workedMinutes)
-    # Skip dates that already have fixed overrides
-    mandatory_total = 0
-    for day in month.days:
-        if day.date in month.policy.date_overrides:
-            continue  # Already locked by date override
-        minimum = minimum_additional_work(day)
-        if minimum > 0:
-            allocated[day.date] = minimum
-            weekly_work[day.week_key] = weekly_work.get(day.week_key, 0) + minimum
-            mandatory_total += minimum
-
     # Fixed local commitments are authoritative even when they exceed the
     # selected target; the caller must surface the resulting conflict.
-    remaining = max(0, requested - fixed_total - mandatory_total)
-    activated = {day.date for day in month.days}
+    remaining, activated = _minimum_activation(
+        month, daily_caps, weekly_work, max(0, requested - fixed_total)
+    )
+    for day in month.days:
+        if day.date not in activated:
+            continue
+        minimum = minimum_additional_work(day)
+        allocated[day.date] = minimum
+        weekly_work[day.week_key] = weekly_work.get(day.week_key, 0) + minimum
+        remaining -= minimum
+
     _water_fill(month, daily_caps, weekly_work, allocated, remaining, activated)
     return month, allocated
 
