@@ -74,8 +74,12 @@ export function PlanTab({payload, loading, selected, setTarget}: TabProps) {
     setCustom('');
   };
 
+  const sourceRecognized = plan.sourceRecognizedMinutes ?? plan.recognizedMinutes ?? 0;
+  const inProgressRecognized = plan.inProgressRecognizedMinutes ?? 0;
+  const hasInProgressRecognition = inProgressRecognized > 0;
 
-  // 추천 근무표 누적: 현재 인정분 기준선에서 실제 추가분만 더한다.
+  // 추천 근무표 누적: 현재 인정분 기준선에서 오늘은 전체 예정시간, 이후는 추가분만 더한다.
+
   let cum = plan.recognizedMinutes || 0;
 
   const bufferDay = strategy.bufferDate ? days.find(d => d.date === strategy.bufferDate) : undefined;
@@ -190,8 +194,9 @@ export function PlanTab({payload, loading, selected, setTarget}: TabProps) {
           {strategy.message && <span className="plan-strip__msg">{strategy.message}</span>}
           <span className="plan-strip__stats">
             <span className="plan-tag">목표 <b>{fmt(plan.targetMinutes)}</b></span>
-            <span className="plan-tag">인정 <b>{fmt(plan.recognizedMinutes)}</b></span>
-            <span className="plan-tag">잔여 <b>{fmt(plan.remainingMinutes)}</b></span>
+            <span className="plan-tag">현재 인정 <b>{fmt(plan.recognizedMinutes)}</b></span>
+            {hasInProgressRecognition && <span className="plan-tag">Flex 월 집계 <b>{fmt(sourceRecognized)}</b> · 집계 반영 대기 <b>+{fmt(inProgressRecognized)}</b></span>}
+            <span className="plan-tag">남은 실제 근무 <b>{fmt(plan.remainingMinutes)}</b></span>
             <span className="plan-tag">계획 <b>{fmt(plan.plannedTotalMinutes)}</b></span>
             <span className="plan-tag">예상 <b>{fmt(plan.forecastMinutes ?? ((plan.recognizedMinutes || 0) + (plan.plannedTotalMinutes || 0)))}</b></span>
             <span className="plan-tag">갭 <b>{fmt(plan.gapMinutes)}</b></span>

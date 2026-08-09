@@ -170,7 +170,7 @@ test('date override requires preview before local save and exposes reset', async
   await expect(page.getByRole('button', {name: '로컬 저장'})).toBeDisabled();
   await page.getByRole('button', {name: '미리보기'}).click();
   await expect(page.getByText('미리보기 완료 · 저장 전까지 Flex에는 기록되지 않습니다.')).toBeVisible();
-  await expect(page.locator('.cal-metrics')).toContainText('2:03');
+  await expect(page.locator('.cal-metrics')).toContainText('15:03');
   await expect(page.getByRole('button', {name: '로컬 저장'})).toBeEnabled();
   await page.getByRole('button', {name: '로컬 저장'}).click();
   await expect(page.getByText('로컬 계획을 저장했습니다. Flex에는 기록되지 않습니다.')).toBeVisible();

@@ -173,8 +173,10 @@ export function syncUrl(state: {year: number; month: number; tab: string; target
   q.set('long', String(state.settings.longDayMinutes));
   q.set('short', String(state.settings.shortDayMinutes));
   if (state.selectedDate) q.set('selectedDate', state.selectedDate);
-  window.history[`${mode}State`](null, '', `${window.location.pathname}?${q}`);
+  window.history[mode === 'push' ? 'pushState' : 'replaceState'](null, '', `${window.location.pathname}?${q}`);
 }
+
+export const currentUrlState = () => urlState(nowDate().getFullYear(), nowDate().getMonth() + 1);
 
 // ---------- data hooks ----------
 

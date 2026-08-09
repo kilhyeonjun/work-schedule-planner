@@ -110,7 +110,7 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
             <span className="an-t">누적 인정 추이 · {year}-{pad(month)}</span>
             <span className="an-sum">
               <b>{fmt(recognized)}</b>&nbsp;/&nbsp;{fmt(selTarget)}&nbsp;·&nbsp;달성&nbsp;<b>{pct}%</b>
-              &nbsp;·&nbsp;남은&nbsp;<b>{fmt(remaining)}</b>&nbsp;·&nbsp;근무일&nbsp;<b>{workedRows.length}일</b>
+              &nbsp;·&nbsp;남은 실제 근무&nbsp;<b>{fmt(remaining)}</b>&nbsp;·&nbsp;근무일&nbsp;<b>{workedRows.length}일</b>
             </span>
           </div>
           <div className="an-card-b">

@@ -90,6 +90,9 @@ export function CalendarTab(props: TabProps) {
   const confTotal = cells.reduce((s, c) => s + (c.inMonth && c.row ? recMin(c.row) : 0), 0);
   const planTotal = Number(planResult?.plannedTotalMinutes || 0);
   const recognizedTotal = Number(planResult?.recognizedMinutes ?? confTotal);
+  const sourceRecognized = Number(planResult?.sourceRecognizedMinutes ?? recognizedTotal);
+  const inProgressRecognized = Number(planResult?.inProgressRecognizedMinutes || 0);
+  const hasInProgressRecognition = inProgressRecognized > 0;
   const remainingTotal = Number(planResult?.remainingMinutes || 0);
   const forecastTotal = recognizedTotal + planTotal;
   const nextPlan = (displayedPayload.planner?.plan?.days || []).find(p => p.date > today && (p.plannedMinutes || 0) > 0);
@@ -358,11 +361,11 @@ export function CalendarTab(props: TabProps) {
             <span className="cal-card__sum mono">목표 <b>{fmt(planResult?.targetMinutes)}</b></span>
           </div>
           <div className="cal-metrics mono">
-            <span><i>실근무 누적</i><b>{fmt(actualTotal)}</b></span>
-            <span><i>인정 누적</i><b>{fmt(recognizedTotal)}</b></span>
-            <span><i>계획 배정</i><b>{fmt(planTotal)}</b></span>
-            <span><i>목표 잔여</i><b>{fmt(remainingTotal)}</b></span>
-            <span className={forecastTotal === Number(planResult?.targetMinutes || 0) ? 'is-ok' : ''}><i>예상 인정</i><b>{fmt(forecastTotal)}</b></span>
+            <span><i>현재 실근무</i><b>{fmt(actualTotal)}</b></span>
+            <span><i>현재 인정</i><b>{fmt(recognizedTotal)}</b></span>
+            {hasInProgressRecognition && <span><i>Flex 월 집계</i><b>{fmt(sourceRecognized)}</b><small>집계 반영 대기 <b>+{fmt(inProgressRecognized)}</b></small></span>}
+            <span><i>남은 실제 근무</i><b>{fmt(remainingTotal)}</b></span>
+            <span className={forecastTotal === Number(planResult?.targetMinutes || 0) ? 'is-ok' : ''}><i>목표 도달 예상</i><b>{fmt(forecastTotal)}</b></span>
           </div>
           {/* 상태 이름 대신 백엔드가 보낸 충돌 근거로 판정 — 새 status가 생겨도 숨지 않음 */}
           {planResult && (Boolean(planResult.conflictReason) || (planResult.overTargetMinutes || 0) > 0) && (
