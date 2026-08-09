@@ -7,7 +7,7 @@ import {Card, Skel} from '../ui';
 
 const BADGE: Record<string, string> = {target: '최소 기준', fixed_ot: '수당 기준선', max: '상한'};
 const EFFORT: Record<string, string> = {target: 'low', fixed_ot: 'mid', max: 'high'};
-const STATUS_KO: Record<string, string> = {planned: '배치 완료', satisfied: '이미 달성', insufficient_slots: '배치 부족'};
+const STATUS_KO: Record<string, string> = {planned: '배치 완료', satisfied: '이미 달성', insufficient_slots: '배치 부족', over_target: '고정 계획 충돌', infeasible_locked_target: '고정 계획 충돌'};
 
 const md = (iso?: string) => (iso ? `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}` : '');
 const signed = (v: number) => `${v < 0 ? '-' : '+'}${fmt(Math.abs(v))}`;
@@ -74,12 +74,12 @@ export function PlanTab({payload, loading, selected, setTarget}: TabProps) {
     setCustom('');
   };
 
-
   const sourceRecognized = plan.sourceRecognizedMinutes ?? plan.recognizedMinutes ?? 0;
   const inProgressRecognized = plan.inProgressRecognizedMinutes ?? 0;
   const hasInProgressRecognition = inProgressRecognized > 0;
 
-  // 추천 근무표 누적: 현재 인정분 기준선에서 실제 추가분만 더한다.
+  // 추천 근무표 누적: 현재 인정분 기준선에서 오늘은 전체 예정시간, 이후는 추가분만 더한다.
+
   let cum = plan.recognizedMinutes || 0;
 
   const bufferDay = strategy.bufferDate ? days.find(d => d.date === strategy.bufferDate) : undefined;
@@ -197,7 +197,10 @@ export function PlanTab({payload, loading, selected, setTarget}: TabProps) {
             <span className="plan-tag">현재 인정 <b>{fmt(plan.recognizedMinutes)}</b></span>
             {hasInProgressRecognition && <span className="plan-tag">Flex 월 집계 <b>{fmt(sourceRecognized)}</b> · 집계 반영 대기 <b>+{fmt(inProgressRecognized)}</b></span>}
             <span className="plan-tag">남은 실제 근무 <b>{fmt(plan.remainingMinutes)}</b></span>
+            <span className="plan-tag">계획 <b>{fmt(plan.plannedTotalMinutes)}</b></span>
+            <span className="plan-tag">예상 <b>{fmt(plan.forecastMinutes ?? ((plan.recognizedMinutes || 0) + (plan.plannedTotalMinutes || 0)))}</b></span>
             <span className="plan-tag">갭 <b>{fmt(plan.gapMinutes)}</b></span>
+            {(plan.overTargetMinutes || 0) > 0 && <span className="plan-tag plan-tag--warn">초과 <b>{fmt(plan.overTargetMinutes)}</b></span>}
             <span className="plan-tag">세후 <b>+{krw(plan.projectedExtraPayAfterTaxKrw)}원</b></span>
           </span>
           {statutoryMax > 0 && (
@@ -209,6 +212,13 @@ export function PlanTab({payload, loading, selected, setTarget}: TabProps) {
           )}
         </Card>
 
+        {/* 상태 이름 대신 백엔드가 보낸 충돌 근거로 판정 — 새 status가 생겨도 숨지 않음 */}
+        {(Boolean(plan.conflictReason) || (plan.overTargetMinutes || 0) > 0) && (
+          <div className="plan-feas plan-feas--warn" role="alert">
+            <span className="plan-feas__st">고정 계획 충돌</span>
+            <span className="plan-feas__msg">{plan.conflictReason || `초과 ${fmt(plan.overTargetMinutes)}`}</span>
+          </div>
+        )}
         {/* 실현 가능성 배너 */}
         {feasOk ? (
           <div className="plan-feas">
@@ -265,7 +275,8 @@ export function PlanTab({payload, loading, selected, setTarget}: TabProps) {
                 </tr>
                 {days.map(d => {
                   const additional = d.plannedAdditionalMinutes ?? d.plannedMinutes ?? 0;
-                  cum += additional;
+                  const accounted = d.isToday ? d.plannedMinutes ?? additional : additional;
+                  cum += accounted;
                   const cls = [
                     (d.currentWorkedMinutes || 0) > 0 ? 'plan-tr--done' : '',
                     d.isToday ? 'plan-tr--today' : '',

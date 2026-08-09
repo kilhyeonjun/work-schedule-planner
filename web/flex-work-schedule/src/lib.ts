@@ -10,7 +10,7 @@ export const nowDate = () => demoWindow.__DEMO_TODAY__ ? new Date(`${demoWindow.
 export type DayRow = {
   date: string; weekday?: string; day_type?: string; badge?: string;
   work_minutes?: number; recognized_minutes?: number; office_minutes?: number;
-  remote_minutes?: number; timeoff_minutes?: number; rest_minutes?: number; night_minutes?: number;
+  remote_minutes?: number; unknown_minutes?: number; timeoff_minutes?: number; rest_minutes?: number; night_minutes?: number;
   first_start?: string; last_end?: string; intervals?: string[]; notes?: string[];
   is_ongoing?: boolean; is_on_break?: boolean;
 };
@@ -37,7 +37,7 @@ export type TodayAction = {
 export type Plan = {
   status?: string; targetMinutes?: number; recognizedMinutes?: number;
   sourceRecognizedMinutes?: number; inProgressRecognizedMinutes?: number;
-  remainingMinutes?: number; plannedTotalMinutes?: number; gapMinutes?: number;
+  remainingMinutes?: number; plannedTotalMinutes?: number; forecastMinutes?: number; gapMinutes?: number; overTargetMinutes?: number; conflictReason?: string;
   projectedOverFixedMinutes?: number; projectedExtraPayPreTaxKrw?: number; projectedExtraPayAfterTaxKrw?: number;
   summary?: {plannedDays?: number; longDays?: number; normalDays?: number; shortDays?: number; adjustDays?: number;
     averageDailyMinutes?: number; weekly?: WeeklyLoad[]};
@@ -140,21 +140,29 @@ export const clampWorkSettings = (s: WorkSettings): WorkSettings => {
 
 // ---------- URL state (backward-compatible params) ----------
 
-const initialParams = new URLSearchParams(window.location.search);
-export const numParam = (key: string, fallback: number) => {
-  const v = Number(initialParams.get(key));
-  return Number.isFinite(v) && v > 0 ? v : fallback;
+const params = () => new URLSearchParams(window.location.search);
+const numberParam = (query: URLSearchParams, key: string, fallback: number) => {
+  const value = Number(query.get(key));
+  return Number.isFinite(value) && value > 0 ? value : fallback;
 };
+export const numParam = (key: string, fallback: number) => numberParam(params(), key, fallback);
 export const initialTarget = () => {
-  const v = Number(initialParams.get('target'));
-  return Number.isFinite(v) && v > 0 ? v : undefined;
+  const value = Number(params().get('target'));
+  return Number.isFinite(value) && value > 0 ? value : undefined;
 };
-export const initialTab = () => initialParams.get('tab') || 'today';
-export const initialSelectedDate = () => initialParams.get('selectedDate') || undefined;
-export const initialWorkSettings = () => clampWorkSettings({
-  normalDayMinutes: numParam('normal', defaultWorkSettings.normalDayMinutes),
-  longDayMinutes: numParam('long', defaultWorkSettings.longDayMinutes),
-  shortDayMinutes: numParam('short', defaultWorkSettings.shortDayMinutes),
+export const initialTab = () => params().get('tab') || 'today';
+export const initialSelectedDate = () => params().get('selectedDate') || undefined;
+export const initialWorkSettings = () => {
+  const query = params();
+  return clampWorkSettings({
+    normalDayMinutes: numberParam(query, 'normal', defaultWorkSettings.normalDayMinutes),
+    longDayMinutes: numberParam(query, 'long', defaultWorkSettings.longDayMinutes),
+    shortDayMinutes: numberParam(query, 'short', defaultWorkSettings.shortDayMinutes),
+  });
+};
+export const urlState = (fallbackYear: number, fallbackMonth: number) => ({
+  year: numParam('year', fallbackYear), month: numParam('month', fallbackMonth), tab: initialTab(),
+  target: initialTarget(), settings: initialWorkSettings(), selectedDate: initialSelectedDate(),
 });
 
 export function syncUrl(state: {year: number; month: number; tab: string; target?: number;
@@ -168,25 +176,7 @@ export function syncUrl(state: {year: number; month: number; tab: string; target
   window.history[mode === 'push' ? 'pushState' : 'replaceState'](null, '', `${window.location.pathname}?${q}`);
 }
 
-export const currentUrlState = () => {
-  const params = new URLSearchParams(window.location.search);
-  const number = (key: string, fallback: number) => {
-    const value = Number(params.get(key));
-    return Number.isFinite(value) && value > 0 ? value : fallback;
-  };
-  return {
-    year: number('year', nowDate().getFullYear()),
-    month: number('month', nowDate().getMonth() + 1),
-    tab: params.get('tab') || 'today',
-    target: (() => { const value = Number(params.get('target')); return Number.isFinite(value) && value > 0 ? value : undefined; })(),
-    settings: clampWorkSettings({
-      normalDayMinutes: number('normal', defaultWorkSettings.normalDayMinutes),
-      longDayMinutes: number('long', defaultWorkSettings.longDayMinutes),
-      shortDayMinutes: number('short', defaultWorkSettings.shortDayMinutes),
-    }),
-    selectedDate: params.get('selectedDate') || undefined,
-  };
-}
+export const currentUrlState = () => urlState(nowDate().getFullYear(), nowDate().getMonth() + 1);
 
 // ---------- data hooks ----------
 

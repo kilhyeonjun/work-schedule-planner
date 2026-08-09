@@ -15,6 +15,13 @@ from .feasibility import (
 from .model import parse_work_month
 
 
+class InfeasiblePlanError(Exception):
+    """Raised when a day's mandatory minimum exceeds its own daily cap."""
+    def __init__(self, metadata: dict[str, Any]):
+        self.metadata = metadata
+        super().__init__(metadata.get("reason", "infeasible"))
+
+
 def _bit_indexes(bits: int):
     while bits:
         lowest = bits & -bits
@@ -186,13 +193,42 @@ def _minimum_activation(
 
 def _allocate(payload: dict[str, Any]) -> tuple[Any, dict[str, int]]:
     month = parse_work_month(payload)
+    
+    # Input validation: minWorkMinutes must not exceed maxWorkMinutes
+    for day in month.days:
+        if day.availability.min_work_minutes > day.availability.max_work_minutes:
+            raise InfeasiblePlanError({
+                "reason": "invalid_availability",
+                "date": day.date,
+                "min_work_minutes": day.availability.min_work_minutes,
+                "max_work_minutes": day.availability.max_work_minutes,
+            })
+    
     allocated = {day.date: 0 for day in month.days}
     baseline = sum(day.recognized_minutes for day in month.days)
     requested = max(0, month.target_minutes - baseline)
     weekly_work = weekly_work_baseline(month.days)
     daily_caps = {day.date: daily_additional_cap(day, month.policy) for day in month.days}
-    remaining, activated = _minimum_activation(month, daily_caps, weekly_work, requested)
 
+    # A date override is a fixed local plan, not a cap. Lock it before the
+    # deterministic allocator so it can only redistribute across other dates.
+    fixed_total = 0
+    for day in month.days:
+        if day.date not in month.policy.date_overrides:
+            continue
+        fixed = month.policy.date_overrides[day.date] - day.worked_minutes
+        if fixed < 0 or fixed > daily_caps[day.date]:
+            raise ValueError(f"date override is outside eligible capacity: {day.date}")
+        allocated[day.date] = fixed
+        fixed_total += fixed
+        weekly_work[day.week_key] = weekly_work.get(day.week_key, 0) + fixed
+        daily_caps[day.date] = 0
+
+    # Fixed local commitments are authoritative even when they exceed the
+    # selected target; the caller must surface the resulting conflict.
+    remaining, activated = _minimum_activation(
+        month, daily_caps, weekly_work, max(0, requested - fixed_total)
+    )
     for day in month.days:
         if day.date not in activated:
             continue
@@ -206,11 +242,58 @@ def _allocate(payload: dict[str, Any]) -> tuple[Any, dict[str, int]]:
 
 
 def plan_month(payload: dict[str, Any]) -> dict[str, Any]:
-    month, allocated = _allocate(payload)
+    try:
+        month, allocated = _allocate(payload)
+    except InfeasiblePlanError as e:
+        month = parse_work_month(payload)
+        baseline = sum(day.recognized_minutes for day in month.days)
+        # Return full day objects with zero allocation for compatibility
+        days = []
+        for day in month.days:
+            cap = daily_work_cap(day, month.policy)
+            days.append({
+                "date": day.date,
+                "weekday": day.weekday,
+                "week": day.week_key,
+                "dayType": day.day_type,
+                "workedMinutes": day.worked_minutes,
+                "recognizedMinutes": day.recognized_minutes,
+                "leaveMinutes": day.leave_minutes,
+                "plannedAdditionalMinutes": 0,
+                "plannedWorkMinutes": day.worked_minutes,
+                "projectedRecognizedMinutes": day.recognized_minutes,
+                "dailyWorkCapMinutes": cap,
+                "reasons": explain_day(day, 0, cap),
+            })
+        return {
+            "dataOrigin": month.data_origin,
+            "generator": month.generator,
+            "period": month.period,
+            "timezone": month.timezone,
+            "algorithm": {"name": "deterministic-water-fill", "version": "1"},
+            "status": "infeasible",
+            "targetMinutes": month.target_minutes,
+            "recognizedBaselineMinutes": baseline,
+            "plannedAdditionalMinutes": 0,
+            "projectedRecognizedMinutes": baseline,
+            "gapMinutes": month.target_minutes - baseline if month.target_minutes > baseline else 0,
+            "overTargetMinutes": 0,
+            "infeasible": e.metadata,
+            "constraints": {},
+            "explanation": "Mandatory minimum work requirements exceed available capacity.",
+            "days": days,
+        }
+    
     baseline = sum(day.recognized_minutes for day in month.days)
     planned_additional = sum(allocated.values())
-    gap = max(0, month.target_minutes - baseline - planned_additional)
-    if month.target_minutes <= baseline:
+    projected = baseline + planned_additional
+    gap = max(0, month.target_minutes - projected)
+    raw_over_target = max(0, projected - month.target_minutes)
+    has_fixed_commitment = bool(month.policy.date_overrides) and planned_additional > 0
+    over_target = raw_over_target if has_fixed_commitment else 0
+    if over_target:
+        status = "over_target"
+    elif month.target_minutes <= baseline:
         status = "satisfied"
     elif gap:
         status = "insufficient_slots"
@@ -251,8 +334,9 @@ def plan_month(payload: dict[str, Any]) -> dict[str, Any]:
         "targetMinutes": month.target_minutes,
         "recognizedBaselineMinutes": baseline,
         "plannedAdditionalMinutes": planned_additional,
-        "projectedRecognizedMinutes": baseline + planned_additional,
+        "projectedRecognizedMinutes": projected,
         "gapMinutes": gap,
+        "overTargetMinutes": over_target,
         "constraints": constraints,
         "explanation": explain_result(status, gap),
         "days": days,

@@ -170,6 +170,7 @@ export function TodayTab(props: TabProps) {
                 <div><div className="today-ledger__k">퇴근</div><div className="mono today-ledger__v">{todayRow?.last_end || '—'}</div></div>
                 <div><div className="today-ledger__k">사무실</div><div className="mono today-ledger__v">{fmt(todayRow?.office_minutes)}</div></div>
                 <div><div className="today-ledger__k">원격</div><div className="mono today-ledger__v">{fmt(todayRow?.remote_minutes)}</div></div>
+                <div><div className="today-ledger__k">추가 근무</div><div className="mono today-ledger__v">{fmt(todayRow?.unknown_minutes)}</div></div>
                 <div><div className="today-ledger__k">휴게</div><div className="mono today-ledger__v">{fmt(todayRow?.rest_minutes)}</div></div>
               </div>
               <div className="today-ledger__ints">

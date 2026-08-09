@@ -188,7 +188,7 @@ def _weekly(
         kinds = [
             _kind(item["plannedWorkMinutes"], normal, long, short)
             for item in items
-            if item["plannedAdditionalMinutes"] > 0
+            if item["plannedWorkMinutes"] > 0
         ]
         start = dt.date.fromisoformat(dates[0])
         end = dt.date.fromisoformat(dates[-1])
@@ -290,13 +290,14 @@ def month_payload(
             }
         )
         additional = planned["plannedAdditionalMinutes"]
+        total_planned = worked + additional
         planner_days.append(
             {
                 "date": raw["date"],
                 "weekday": WEEKDAYS[date.weekday()],
-                "kind": _kind(worked + additional, normal, long, short) if additional else "off",
-                "window": _window(worked + additional) if additional else "—",
-                "plannedMinutes": worked + additional,
+                "kind": _kind(total_planned, normal, long, short) if total_planned > 0 else "off",
+                "window": _window(total_planned) if total_planned > 0 else "—",
+                "plannedMinutes": total_planned,
                 "plannedAdditionalMinutes": additional,
                 "currentWorkedMinutes": worked,
                 "timeoffMinutes": leave,
@@ -383,7 +384,7 @@ def month_payload(
             "projectedExtraPayPreTaxKrw": 0,
             "projectedExtraPayAfterTaxKrw": 0,
             "summary": {
-                "plannedDays": sum(day["plannedAdditionalMinutes"] > 0 for day in result["days"]),
+                "plannedDays": sum(day["kind"] != "off" for day in planner_days),
                 "longDays": sum(day["kind"] == "long" for day in planner_days),
                 "normalDays": sum(day["kind"] == "normal" for day in planner_days),
                 "shortDays": sum(day["kind"] == "short" for day in planner_days),

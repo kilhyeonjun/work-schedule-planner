@@ -9,6 +9,9 @@ from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
+DIST = ROOT / "web" / "flex-work-schedule" / "dist-demo"
+if not DIST.is_dir():
+    DIST = ROOT / "web" / "flex-work-schedule" / "dist"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
@@ -20,12 +23,12 @@ class Handler(BaseHTTPRequestHandler):
         request = urlsplit(self.path)
         status, headers, body = route("GET", request.path, request.query)
         if status == 404 and (request.path == "/demo" or request.path == "/demo/"):
-            self._file(ROOT / "web" / "flex-work-schedule" / "dist" / "index.html", "text/html; charset=utf-8")
+            self._file(DIST / "index.html", "text/html; charset=utf-8")
             return
         if status == 404 and request.path.startswith("/demo/assets/"):
             name = request.path.removeprefix("/demo/assets/")
             if name and "/" not in name and "\\" not in name:
-                self._file(ROOT / "web" / "flex-work-schedule" / "dist" / "assets" / name)
+                self._file(DIST / "assets" / name)
                 return
         self.send_response(status)
         for key, value in headers.items():

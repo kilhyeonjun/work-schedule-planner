@@ -187,6 +187,7 @@
       "seed": 7601,
       "version": "1"
     },
+    "overTargetMinutes": 0,
     "period": "2042-03",
     "plannedAdditionalMinutes": 3000,
     "projectedRecognizedMinutes": 3900,
