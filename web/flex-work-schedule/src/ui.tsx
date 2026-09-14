@@ -89,11 +89,13 @@ export function SyncChip({payload, archiveMode}: {payload: MonthPayload | null; 
 }
 
 /** 모든 현재-month 탭에서 같은 상태를 편집하는 전역 전략 패널. */
-export function StrategySwitcher({payload, selected, setTarget, enabled, settings, setSettings, loading, baseline}: {
+export function StrategySwitcher({payload, selected, setTarget, enabled, dailyAverageMinutes, setDailyAverageMinutes, settings, setSettings, loading, baseline}: {
   payload: MonthPayload | null;
   selected: number;
   setTarget: (n: number) => void;
   enabled: boolean;
+  dailyAverageMinutes?: number;
+  setDailyAverageMinutes: (minutes?: number) => void;
   settings: WorkSettings;
   setSettings: (settings: WorkSettings) => void;
   loading: boolean;
@@ -111,7 +113,12 @@ export function StrategySwitcher({payload, selected, setTarget, enabled, setting
   const options: TargetOption[] = payload?.planner?.targetOptions || [];
   const selectedOption = options.find(o => o.minutes === selected);
   const min = Math.max(60, (payload?.derived?.targetMinutes || 0) - 600);
-  const max = payload?.derived?.maxMinutes || selected || 719;
+  const dailyMin = 60;
+  const dailyMax = 24 * 60;
+  const max = 31 * dailyMax;
+  const datedWorkdays = new Set(payload?.days?.filter(day => day.day_type === 'workday').map(day => day.date) || []).size;
+  const workdayCount = Math.max(1, datedWorkdays || Math.round((payload?.derived?.targetMinutes || selected) / (8 * 60)));
+  const dailyAverage = dailyAverageMinutes || Math.round(selected / workdayCount);
 
   useEffect(() => {
     if (!open) return;
@@ -146,10 +153,16 @@ export function StrategySwitcher({payload, selected, setTarget, enabled, setting
     return v !== null && v >= min && v <= max ? v : null;
   };
   const applyTarget = (value: number) => setTarget(Math.max(min, Math.min(max, value)));
+  const applyDailyAverage = (value: number) => {
+    const next = Math.max(dailyMin, Math.min(dailyMax, value));
+    applyTarget(next * workdayCount);
+    setDailyAverageMinutes(next);
+  };
   const applySetting = (key: keyof WorkSettings, value: number) =>
     setSettings(clampWorkSettings({...settings, [key]: value}));
   const reset = () => {
     setTarget(baseline?.target || selected);
+    setDailyAverageMinutes(undefined);
     setSettings(baseline?.settings || defaultWorkSettings);
   };
   const workControls: Array<{label: string; key: keyof WorkSettings; min: number; max: number}> = [
@@ -177,11 +190,32 @@ export function StrategySwitcher({payload, selected, setTarget, enabled, setting
             <div className="switcher__presets" aria-label="목표 프리셋">
               {options.map(o => (
                 <button key={o.key} className={`switcher__preset ${o.minutes === selected ? 'is-selected' : ''}`}
-                  aria-pressed={o.minutes === selected} onClick={() => setTarget(o.minutes)}>
+                  aria-pressed={o.minutes === selected} onClick={() => { setDailyAverageMinutes(undefined); setTarget(o.minutes); }}>
                   <span>{o.label}</span><b className="mono">{fmt(o.minutes)}</b>
                 </button>
               ))}
             </div>
+            <div className="switcher__divider" />
+            <section className="switcher__control switcher__daily">
+              <div className="switcher__control-head">
+                <label htmlFor="strategy-daily-average">월별 일 평균</label><b className="mono">{fmt(dailyAverage)}</b>
+              </div>
+              <div className="switcher__daily-presets" aria-label="일 평균 프리셋">
+                {[8, 9, 10].map(hours => (
+                  <button key={hours} className={`switcher__preset ${dailyAverage === hours * 60 ? 'is-selected' : ''}`}
+                    aria-pressed={dailyAverage === hours * 60} onClick={() => applyDailyAverage(hours * 60)}>
+                    <span>일 평균 {hours}시간</span><b className="mono">{fmt(hours * 60)}</b>
+                  </button>
+                ))}
+              </div>
+              <div className="switcher__slider-row">
+                <button className="stepper" aria-label="일 평균 1분 감소" disabled={dailyAverage <= dailyMin} onClick={() => applyDailyAverage(dailyAverage - 1)}>−</button>
+                <input id="strategy-daily-average" className="switcher__range" type="range" min={dailyMin} max={dailyMax} step={1} value={dailyAverage}
+                  aria-label="월별 일 평균 근무시간" onChange={e => applyDailyAverage(Number(e.currentTarget.value))} />
+                <button className="stepper" aria-label="일 평균 1분 증가" disabled={dailyAverage >= dailyMax} onClick={() => applyDailyAverage(dailyAverage + 1)}>+</button>
+              </div>
+              <span className="switcher__hint">근무일 {workdayCount}일 기준 월 목표 <b className="mono">{fmt(dailyAverage * workdayCount)}</b> · 1분 단위</span>
+            </section>
             <div className="switcher__divider" />
             <section className="switcher__control">
               <div className="switcher__control-head">

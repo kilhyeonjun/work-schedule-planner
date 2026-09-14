@@ -2,8 +2,8 @@ import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import './index.css';
 import {
-  clampWorkSettings, currentUrlState, initialSelectedDate, initialTab, initialTarget, initialWorkSettings,
-  nowDate, numParam, pad, syncUrl, useArchive, useMonthData, WorkSettings,
+  clampWorkSettings, currentUrlState, initialDailyAverage, initialSelectedDate, initialTab, initialTarget, initialWorkSettings,
+  defaultWorkSettings, nowDate, numParam, pad, plannerPreferences, savePlannerPreferences, syncUrl, useArchive, useMonthData, WorkSettings,
 } from './lib';
 import {Card, Sidebar, StrategySwitcher, SyncChip, TabBar, TABS} from './ui';
 import {TodayTab} from './tabs/Today';
@@ -21,19 +21,34 @@ function App() {
   const [year, setYear] = useState(() => numParam('year', nowDate().getFullYear()));
   const [month, setMonth] = useState(() => numParam('month', nowDate().getMonth() + 1));
   const [tab, setTab] = useState(initialTab());
-  const [target, setTarget] = useState<number | undefined>(initialTarget());
-  const [settings, setSettings] = useState<WorkSettings>(initialWorkSettings());
+  const [target, setTarget] = useState<number | undefined>(() => initialTarget(year, month));
+  const [dailyAverageMinutes, setDailyAverageMinutes] = useState<number | undefined>(() => initialDailyAverage(year, month));
+  const [settings, setSettings] = useState<WorkSettings>(() => initialWorkSettings(year, month));
   const [selectedDate, setSelectedDate] = useState<string | undefined>(initialSelectedDate());
   const strategyBaseline = useRef<{target: number; settings: WorkSettings} | null>(null);
   const urlMode = useRef<'push' | 'replace'>('replace');
+  const selectedMonth = useRef(`${year}-${month}`);
   const pushHistory = (update: () => void) => {
     urlMode.current = 'push';
     update();
   };
   const setTabWithHistory = (next: string) => pushHistory(() => setTab(next));
-  const setTargetWithHistory = (next: number) => pushHistory(() => setTarget(next));
+  const setTargetWithHistory = (next: number) => pushHistory(() => {
+    setTarget(next);
+    setDailyAverageMinutes(undefined);
+  });
   const setSettingsWithHistory = (next: WorkSettings) => pushHistory(() => setSettings(next));
   const setSelectedDateWithHistory = (next?: string) => pushHistory(() => setSelectedDate(next));
+  const selectMonth = (nextYear: number, nextMonth: number) => pushHistory(() => {
+    const saved = plannerPreferences(nextYear, nextMonth);
+    selectedMonth.current = `${nextYear}-${nextMonth}`;
+    setYear(nextYear);
+    setMonth(nextMonth);
+    setTarget(saved.target);
+    setDailyAverageMinutes(saved.dailyAverageMinutes);
+    setSettings(saved.settings || defaultWorkSettings);
+    setSelectedDate(undefined);
+  });
 
   const {payload, loading, error: monthError, retry: retryMonth} = useMonthData(year, month, target, settings);
   const {archive, error: archiveError, retry: retryArchive} = useArchive();
@@ -55,19 +70,23 @@ function App() {
   }, [payload]);
 
   useEffect(() => {
-    syncUrl({year, month, tab, target, settings, selectedDate}, urlMode.current);
+    if (selectedMonth.current !== `${year}-${month}`) return;
+    syncUrl({year, month, tab, target, dailyAverageMinutes, settings, selectedDate}, urlMode.current);
+    savePlannerPreferences(year, month, {target, dailyAverageMinutes, settings});
     urlMode.current = 'replace';
-  }, [year, month, tab, target, selectedDate,
+  }, [year, month, tab, target, dailyAverageMinutes, selectedDate,
     settings.normalDayMinutes, settings.longDayMinutes, settings.shortDayMinutes]);
 
   useEffect(() => {
     const restoreUrlState = () => {
       const next = currentUrlState();
       urlMode.current = 'replace';
+      selectedMonth.current = `${next.year}-${next.month}`;
       setYear(next.year);
       setMonth(next.month);
       setTab(next.tab);
       setTarget(next.target);
+      setDailyAverageMinutes(next.dailyAverageMinutes);
       setSettings(next.settings);
       setSelectedDate(next.selectedDate);
     };
@@ -84,20 +103,12 @@ function App() {
 
   const move = (d: number) => {
     const next = new Date(year, month - 1 + d, 1);
-    pushHistory(() => {
-      setYear(next.getFullYear());
-      setMonth(next.getMonth() + 1);
-      setSelectedDate(undefined);
-    });
+    selectMonth(next.getFullYear(), next.getMonth() + 1);
   };
   const goCurrent = () => {
     const t = nowDate();
     if (year === t.getFullYear() && month === t.getMonth() + 1) return;
-    pushHistory(() => {
-      setYear(t.getFullYear());
-      setMonth(t.getMonth() + 1);
-      setSelectedDate(undefined);
-    });
+    selectMonth(t.getFullYear(), t.getMonth() + 1);
   };
 
   // archive months have no planner: keep tabs meaningful
@@ -111,7 +122,7 @@ function App() {
     payload, loading, archive, selected, setTarget: setTargetWithHistory, archiveMode,
     settings, setSettings: setSettingsWithHistory,
     selectedDate, setSelectedDate: setSelectedDateWithHistory,
-    year, month, onSelectMonth: (y: number, m: number) => pushHistory(() => { setYear(y); setMonth(m); setSelectedDate(undefined); }),
+    year, month, onSelectMonth: selectMonth,
   };
 
   return (
@@ -131,6 +142,7 @@ function App() {
           <span className="statusbar__spacer" />
           {payload?.dataOrigin === 'synthetic' && <span className="statusbar__chip"><span className="dot dot--indigo" />합성 데이터</span>}
           <StrategySwitcher payload={payload} selected={selected} setTarget={setTargetWithHistory} enabled={targetControlsEnabled}
+            dailyAverageMinutes={dailyAverageMinutes} setDailyAverageMinutes={setDailyAverageMinutes}
             settings={settings} setSettings={setSettingsWithHistory} loading={loading} baseline={strategyBaseline.current} />
           <SyncChip payload={payload} archiveMode={archiveMode} />
         </header>
