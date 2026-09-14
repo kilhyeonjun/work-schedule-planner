@@ -89,6 +89,7 @@ export type ArchiveMonth = {key: string; year: number; month: number; collectedA
 export type ArchivePayload = {months?: ArchiveMonth[]};
 
 export type WorkSettings = {normalDayMinutes: number; longDayMinutes: number; shortDayMinutes: number};
+export type PlannerPreferences = {target?: number; dailyAverageMinutes?: number; settings: WorkSettings};
 
 /** 모든 탭 컴포넌트가 받는 공통 props (main.tsx tabProps). */
 export type TabProps = {
@@ -141,39 +142,79 @@ export const clampWorkSettings = (s: WorkSettings): WorkSettings => {
 // ---------- URL state (backward-compatible params) ----------
 
 const params = () => new URLSearchParams(window.location.search);
+const PREFERENCES_KEY = 'work-schedule.preferences.v1';
+const monthKey = (year: number, month: number) => `${year}-${pad(month)}`;
+export const plannerPreferences = (year: number, month: number): Partial<PlannerPreferences> => {
+  try {
+    const all = JSON.parse(window.localStorage.getItem(PREFERENCES_KEY) || '{}');
+    const value = all?.[monthKey(year, month)];
+    if (!value || typeof value !== 'object') return {};
+    const target = Number(value.target);
+    const dailyAverageMinutes = Number(value.dailyAverageMinutes);
+    const rawSettings = value.settings;
+    return {
+      target: Number.isFinite(target) && target > 0 ? target : undefined,
+      dailyAverageMinutes: Number.isFinite(dailyAverageMinutes) && dailyAverageMinutes >= 60 && dailyAverageMinutes <= 24 * 60
+        ? dailyAverageMinutes : undefined,
+      settings: rawSettings && typeof rawSettings === 'object' ? clampWorkSettings(rawSettings as WorkSettings) : undefined,
+    };
+  } catch {
+    return {};
+  }
+};
 const numberParam = (query: URLSearchParams, key: string, fallback: number) => {
   const value = Number(query.get(key));
   return Number.isFinite(value) && value > 0 ? value : fallback;
 };
 export const numParam = (key: string, fallback: number) => numberParam(params(), key, fallback);
-export const initialTarget = () => {
+export const initialTarget = (year = numParam('year', nowDate().getFullYear()), month = numParam('month', nowDate().getMonth() + 1)) => {
   const value = Number(params().get('target'));
-  return Number.isFinite(value) && value > 0 ? value : undefined;
+  if (Number.isFinite(value) && value > 0) return value;
+  const stored = Number(plannerPreferences(year, month).target);
+  return Number.isFinite(stored) && stored > 0 ? stored : undefined;
+};
+export const initialDailyAverage = (year = numParam('year', nowDate().getFullYear()), month = numParam('month', nowDate().getMonth() + 1)) => {
+  const value = Number(params().get('daily'));
+  if (Number.isFinite(value) && value >= 60 && value <= 24 * 60) return value;
+  const stored = Number(plannerPreferences(year, month).dailyAverageMinutes);
+  return Number.isFinite(stored) && stored >= 60 && stored <= 24 * 60 ? stored : undefined;
 };
 export const initialTab = () => params().get('tab') || 'today';
 export const initialSelectedDate = () => params().get('selectedDate') || undefined;
-export const initialWorkSettings = () => {
+export const initialWorkSettings = (year = numParam('year', nowDate().getFullYear()), month = numParam('month', nowDate().getMonth() + 1)) => {
   const query = params();
+  const stored = plannerPreferences(year, month).settings;
   return clampWorkSettings({
-    normalDayMinutes: numberParam(query, 'normal', defaultWorkSettings.normalDayMinutes),
-    longDayMinutes: numberParam(query, 'long', defaultWorkSettings.longDayMinutes),
-    shortDayMinutes: numberParam(query, 'short', defaultWorkSettings.shortDayMinutes),
+    normalDayMinutes: numberParam(query, 'normal', stored?.normalDayMinutes || defaultWorkSettings.normalDayMinutes),
+    longDayMinutes: numberParam(query, 'long', stored?.longDayMinutes || defaultWorkSettings.longDayMinutes),
+    shortDayMinutes: numberParam(query, 'short', stored?.shortDayMinutes || defaultWorkSettings.shortDayMinutes),
   });
 };
 export const urlState = (fallbackYear: number, fallbackMonth: number) => ({
   year: numParam('year', fallbackYear), month: numParam('month', fallbackMonth), tab: initialTab(),
-  target: initialTarget(), settings: initialWorkSettings(), selectedDate: initialSelectedDate(),
+  target: initialTarget(), dailyAverageMinutes: initialDailyAverage(), settings: initialWorkSettings(), selectedDate: initialSelectedDate(),
 });
 
 export function syncUrl(state: {year: number; month: number; tab: string; target?: number;
-  settings: WorkSettings; selectedDate?: string}, mode: 'push' | 'replace' = 'replace') {
+  dailyAverageMinutes?: number; settings: WorkSettings; selectedDate?: string}, mode: 'push' | 'replace' = 'replace') {
   const q = new URLSearchParams({year: String(state.year), month: String(state.month), tab: state.tab});
   if (state.target) q.set('target', String(state.target));
+  if (state.dailyAverageMinutes) q.set('daily', String(state.dailyAverageMinutes));
   q.set('normal', String(state.settings.normalDayMinutes));
   q.set('long', String(state.settings.longDayMinutes));
   q.set('short', String(state.settings.shortDayMinutes));
   if (state.selectedDate) q.set('selectedDate', state.selectedDate);
   window.history[mode === 'push' ? 'pushState' : 'replaceState'](null, '', `${window.location.pathname}?${q}`);
+}
+
+export function savePlannerPreferences(year: number, month: number, preferences: PlannerPreferences) {
+  try {
+    const all = JSON.parse(window.localStorage.getItem(PREFERENCES_KEY) || '{}');
+    all[monthKey(year, month)] = preferences;
+    window.localStorage.setItem(PREFERENCES_KEY, JSON.stringify(all));
+  } catch {
+    // Storage denial must not break the planner.
+  }
 }
 
 export const currentUrlState = () => urlState(nowDate().getFullYear(), nowDate().getMonth() + 1);

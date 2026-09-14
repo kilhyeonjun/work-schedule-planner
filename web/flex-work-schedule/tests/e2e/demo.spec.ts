@@ -43,6 +43,43 @@ test('desktop keeps canonical five tabs, target switching, custom target, and ar
   await expect(page.locator('.sidebar__item', {hasText: '분석'})).toHaveCount(0);
 });
 
+test('daily-average target supports 8/9/10-hour presets, minute precision, and survives a fresh login URL', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 1000});
+  await page.goto('/demo/?year=2042&month=3&tab=today');
+  await page.locator('.switcher__trigger').click();
+  const dialog = page.getByRole('dialog', {name: '전략 설정'});
+
+  await expect(dialog.getByRole('button', {name: /일 평균 8시간/})).toBeVisible();
+  await expect(dialog.getByRole('button', {name: /일 평균 9시간/})).toBeVisible();
+  await expect(dialog.getByRole('button', {name: /일 평균 10시간/})).toBeVisible();
+  await dialog.getByRole('button', {name: /일 평균 9시간/}).click();
+  const workdayCount = await dialog.getByText(/근무일 \d+일 기준/).evaluate(element => Number(element.textContent?.match(/근무일 (\d+)일/)?.[1]));
+  await expect.poll(() => Number(new URL(page.url()).searchParams.get('target'))).toBe(9 * 60 * workdayCount);
+  await page.getByRole('button', {name: '일 평균 1분 증가'}).click();
+  await expect(dialog.getByText('9:01', {exact: true})).toBeVisible();
+  await expect.poll(() => Number(new URL(page.url()).searchParams.get('target'))).toBe((9 * 60 + 1) * workdayCount);
+  const persistedTarget = new URL(page.url()).searchParams.get('target');
+  expect(persistedTarget).not.toBeNull();
+  await page.getByRole('button', {name: '보통 1분 증가'}).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('normal')).toBe('501');
+
+  await page.goto('/demo/?year=2042&month=3&tab=today');
+  await page.locator('.switcher__trigger').click();
+  const restored = page.getByRole('dialog', {name: '전략 설정'});
+  await expect(restored.getByText('9:01', {exact: true})).toBeVisible();
+  await expect(restored.getByText('8:21', {exact: true})).toBeVisible();
+  expect(new URL(page.url()).searchParams.get('target')).toBe(persistedTarget);
+
+  await restored.locator('.switcher__presets .switcher__preset').first().click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('daily')).toBeNull();
+  await page.keyboard.press('Escape');
+
+  await page.getByRole('button', {name: '다음 달'}).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('target')).toBeNull();
+  await page.getByRole('button', {name: '이전 달'}).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('target')).not.toBeNull();
+});
+
 test('global strategy modal resets to its initial baseline and latest request wins', async ({page}) => {
   await page.setViewportSize({width: 1440, height: 1000});
   const aborted: string[] = [];
@@ -58,7 +95,7 @@ test('global strategy modal resets to its initial baseline and latest request wi
   const trigger = page.locator('.switcher__trigger');
   await trigger.click();
   const dialog = page.getByRole('dialog', {name: '전략 설정'});
-  await expect(dialog.locator('input[type="range"]')).toHaveCount(4);
+  await expect(dialog.locator('input[type="range"]')).toHaveCount(5);
   await expect(page.locator('.content')).toHaveJSProperty('inert', true);
   await expect(page.locator('.statusbar__nav')).toHaveJSProperty('inert', true);
 
@@ -129,7 +166,7 @@ test('mobile renders canonical bottom navigation without page overflow', async (
   await expect(page.locator('.cal-detail')).toBeVisible();
   await page.locator('.switcher__trigger').click();
   const sheet = page.getByRole('dialog', {name: '전략 설정'});
-  await expect(sheet.locator('input[type="range"]')).toHaveCount(4);
+  await expect(sheet.locator('input[type="range"]')).toHaveCount(5);
   await expect(sheet.getByLabel('단축', {exact: true})).toHaveAttribute('min', '285');
   const geometry = await sheet.evaluate(element => {
     const rect = element.getBoundingClientRect();

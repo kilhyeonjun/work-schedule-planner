@@ -233,6 +233,8 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
 .switcher__updating { color: var(--green); font-size: 11px; font-weight: 600; white-space: nowrap; }
 .switcher__updating.is-active { color: var(--fixed-ot); }
 .switcher__presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.switcher__daily { gap: 10px; }
+.switcher__daily-presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .switcher__preset {
   display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 2px;
   min-height: 48px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px;
@@ -257,6 +259,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
 .switcher__input:focus { outline: none; border-color: var(--indigo); }
 .switcher__input.is-invalid { border-color: var(--warn); }
 .switcher__hint { color: var(--mut); font-size: 11px; }
+.switcher__hint b { color: var(--ink); }
 .switcher__work-controls { display: grid; gap: 10px; }
 .switcher__actions {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
