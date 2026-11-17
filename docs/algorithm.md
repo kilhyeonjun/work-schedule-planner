@@ -80,3 +80,9 @@ Its 9시간 target counts synthetic month workdays × 540; the demo API permits 
 target above the older 9,000-minute selector bound. Each comparison uses the same
 planner as a selected target. An infeasible nine-hour target retains its requested
 minutes and reports the unmet gap without relaxing any constraints.
+
+Guard labels are self-contained Korean summaries for direct display: clipped
+Monday–Sunday month dates and remaining/excess `H:MM` for the weekly 52-hour
+limit, Friday's planned `HH:MM` departure versus 16:00, and a day's actual versus
+required rest in `H:MM`. Breaches precede risks; each severity sorts by date
+(weekly guards use the clipped week start).
