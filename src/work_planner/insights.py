@@ -101,6 +101,8 @@ def _constrained_projection(payload: dict, now: dt.datetime, *, leave_now: bool 
     from .feasibility import additional_work_bounds
     from .model import parse_work_month
     if constraints is not None:
+        if constraints.get("fixedConflict"):
+            return None
         source = {**constraints, "days": [
             {**day, "availability": {**day["availability"], "available": False,
                                      "maxWorkMinutes": day["workedMinutes"]}}

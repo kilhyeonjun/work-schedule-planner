@@ -21,3 +21,21 @@ def test_bounds_match_constrained_planner(weekly, worked, fixed):
     assert upper == plan_month(source)["plannedAdditionalMinutes"]
     source["targetMinutes"] = worked
     assert lower == plan_month(source)["plannedAdditionalMinutes"]
+
+
+def test_fixed_week_above_limit_has_no_reachable_bounds():
+    source = {
+        "dataOrigin": "synthetic", "period": "2042-03", "timezone": "Asia/Seoul", "targetMinutes": 3300,
+        "policy": {"weeklyLimitMinutes": 3120, "normalMinutes": 500, "maxMinutes": 719,
+                   "dateOverrides": {"2042-03-07": 500}},
+        "days": [
+            {"date": "2042-03-03", "dayType": "workday", "workedMinutes": 2800, "recognizedMinutes": 2800,
+             "leaveMinutes": 0, "availability": {"available": False, "minWorkMinutes": 0, "maxWorkMinutes": 2800}},
+            {"date": "2042-03-07", "dayType": "workday", "workedMinutes": 0, "recognizedMinutes": 0,
+             "leaveMinutes": 0, "availability": {"available": True, "minWorkMinutes": 285, "maxWorkMinutes": 500}},
+        ],
+    }
+    assert additional_work_bounds(parse_work_month(source)) is None
+    result = plan_month(source)
+    assert result["status"] == "infeasible"
+    assert result["infeasible"]["reason"] == "fixed_weekly_conflict"

@@ -236,7 +236,11 @@ def test_demo_attaches_insights_and_route_serializes_them():
     import json
 
     source = month_payload()
-    assert source["planner"]["insights"] == month_insights(source, now=NOW)
+    # Demo passes its actual 40-hour canonical weekly policy, not live defaults.
+    assert source["planner"]["insights"]["forecast"] == {
+        "recognizedMinutes": 780, "expectedMinutes": 7800, "minMinutes": 780,
+        "maxMinutes": 10439, "basis": "ledger",
+    }
     assert source["planner"]["insights"]["asOf"] == "2042-03-04T12:00"
     status, _, body = route("GET", "/demo/api/month", "")
     assert status == 200

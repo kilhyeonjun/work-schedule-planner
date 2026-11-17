@@ -869,3 +869,16 @@ test('office minimum collapses when met and omits missing breakdown', async ({pa
   await expect(page.locator('.today-month')).toBeVisible();
   await expect(page.locator('.office-minimum')).toHaveCount(0);
 });
+
+test('fixed forecast conflicts show no fabricated range', async ({page}) => {
+  await page.route('**/demo/api/month?**', async route => {
+    const response = await route.fetch();
+    const body = await response.json();
+    Object.assign(body.planner.insights.forecast, {minMinutes: null, maxMinutes: null, fixedConflict: true});
+    await route.fulfill({response, json: body});
+  });
+  await page.goto('/demo/?tab=analysis');
+  await expect(page.locator('.forecast-card [role="alert"]')).toContainText('가능한 범위가 없습니다');
+  await expect(page.locator('.forecast-card .forecast-bar')).toHaveCount(0);
+  await expect(page.locator('.forecast-card')).not.toContainText('최대 0:00');
+});
