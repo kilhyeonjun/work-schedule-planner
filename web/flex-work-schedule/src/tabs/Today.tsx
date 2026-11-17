@@ -221,9 +221,10 @@ export function TodayTab(props: TabProps) {
           <TargetProgress insights={payload?.planner?.insights} />
           {leaveNow && <Card className="leave-now">
             <h2>지금 퇴근하면</h2>
-            <p className="muted">오늘 남은 {fmt(leaveNow.todayRemainingMinutes)}을 이후 {leaveNow.remainingWorkdays}일에 균등하게 나누는 가정입니다.</p>
+            <p className="muted">오늘 남은 {fmt(leaveNow.todayRemainingMinutes)}을 이후 {leaveNow.remainingWorkdays}일에 옮길 때의 영향입니다.</p>
             <div className="leave-now__average"><b>{fmt(leaveNow.averageDailyBeforeMinutes)}</b><span>→</span><b>{fmt(leaveNow.averageDailyAfterMinutes)}</b><span>/ 일</span></div>
-            <p>균등하게 나누면 하루 +{fmt(leaveNow.additionalPerDayMinutes)} · {leaveNow.feasible ? '남은 날짜에 배치 가능' : `제약 반영 후 부족 ${fmt(leaveNow.shortfallMinutes)}`}</p>
+            <p>참고 평균: 하루 +{fmt(leaveNow.additionalPerDayMinutes)} · 실제 날짜별 배분은 다를 수 있습니다</p>
+            <p>{leaveNow.feasible ? '제약을 반영해 남은 날짜에 배치 가능' : `제약 반영 후 부족 ${fmt(leaveNow.shortfallMinutes)}`}</p>
             <small className="muted">주 52시간·금요일·날짜 고정·휴가를 반영한 계산 · 저장된 계획은 바뀌지 않습니다</small>
           </Card>}
           {upcoming.length > 0 && <Card className="upcoming">

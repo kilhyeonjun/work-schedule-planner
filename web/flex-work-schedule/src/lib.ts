@@ -80,7 +80,7 @@ export type PlannerInsights = {
   guards: {key: string; level: 'risk' | 'breach'; weekKey?: string; date?: string; label: string; minutes: number; limitMinutes: number}[];
   leaveNow: null | {date: string; workedMinutes: number; todayRemainingMinutes: number; remainingWorkdays: number;
     averageDailyBeforeMinutes: number; averageDailyAfterMinutes: number; additionalPerDayMinutes: number; feasible: boolean; shortfallMinutes: number};
-  forecast: {recognizedMinutes: number; expectedMinutes: number; minMinutes: number; maxMinutes: number};
+  forecast: {recognizedMinutes: number; expectedMinutes: number; minMinutes: number | null; maxMinutes: number | null; fixedConflict?: boolean; basis?: 'target_eligible' | 'ledger'};
   targets?: {key: 'base' | 'nine_hour' | 'fixed_ot' | 'max'; label: string; minutes: number; achievedPercent: number; officialPercent: number;
     requiredDailyMinutes: number; requiredFeasible: boolean; etaDate: string | null; projectedMinutes: number; projectedPercent: number; shortfallMinutes: number}[];
   pace?: {totalWorkdays: number; completedWorkdays: number; remainingWorkdays: number; expectedPercent: number};

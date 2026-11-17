@@ -25,6 +25,7 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
   const d = payload.derived || {};
   const days = payload.days || [];
   const planner = payload.planner;
+  const forecast = planner?.insights?.forecast;
   const plan = planner?.plan;
   const comparisons = planner?.comparisons || [];
   const today = todayIso();
@@ -249,14 +250,16 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
       </div>
       <div className="an-col">
 
-        {planner?.insights?.forecast && <Card className="forecast-card">
+        {forecast && <Card className="forecast-card">
           <h2>월말 예상 범위</h2>
-          <p className="muted">날짜 고정·주 52시간·금요일·남은 시간을 반영한 범위 · 수집값과 추천표 기준 추정</p>
-          <div className="forecast-labels"><span>최소 {fmt(planner.insights.forecast.minMinutes)}</span><span>최대 {fmt(planner.insights.forecast.maxMinutes)}</span></div>
-          <div className="forecast-bar" role="img" aria-label={`예상 ${fmt(planner.insights.forecast.expectedMinutes)}, 최소 ${fmt(planner.insights.forecast.minMinutes)}, 최대 ${fmt(planner.insights.forecast.maxMinutes)}`}>
-            <i style={{left: `${Math.max(0, Math.min(100, 100 * (planner.insights.forecast.expectedMinutes - planner.insights.forecast.minMinutes) / Math.max(1, planner.insights.forecast.maxMinutes - planner.insights.forecast.minMinutes)))}%`}} />
-          </div>
-          <b>예상 {fmt(planner.insights.forecast.expectedMinutes)}</b>
+          <p className="muted">날짜 고정·주 52시간·금요일·남은 시간을 반영한 범위 · {forecast.basis === 'target_eligible' ? '추천표와 같은 목표 산입 기준' : '원장 인정 기준'} 추정</p>
+          {forecast.minMinutes != null && forecast.maxMinutes != null ? <>
+            <div className="forecast-labels"><span>최소 {fmt(forecast.minMinutes)}</span><span>최대 {fmt(forecast.maxMinutes)}</span></div>
+            <div className="forecast-bar" role="img" aria-label={`예상 ${fmt(forecast.expectedMinutes)}, 최소 ${fmt(forecast.minMinutes)}, 최대 ${fmt(forecast.maxMinutes)}`}>
+              <i style={{left: `${Math.max(0, Math.min(100, 100 * (forecast.expectedMinutes - forecast.minMinutes) / Math.max(1, forecast.maxMinutes - forecast.minMinutes)))}%`}} />
+            </div>
+          </> : <p role="alert">날짜 고정과 근무 상한이 충돌해 가능한 범위가 없습니다. 고정된 날짜를 확인하세요.</p>}
+          <b>추천표 예상 {fmt(forecast.expectedMinutes)}</b>
         </Card>}
         {/* 수당 효율 */}
         {planner && (

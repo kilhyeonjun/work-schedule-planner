@@ -763,7 +763,7 @@ test('mobile explains leave-now shortfall without allocation jargon', async ({pa
     await route.fulfill({response, body: JSON.stringify(body)});
   });
   await page.goto('/demo/?tab=today');
-  await expect(page.locator('.leave-now')).toContainText('균등하게 나누면 하루 +');
+  await expect(page.locator('.leave-now')).toContainText('참고 평균: 하루 +');
   await expect(page.locator('.leave-now')).toContainText('제약 반영 후 부족 3:07');
   await expect(page.locator('.leave-now')).toContainText('주 52시간·금요일·날짜 고정·휴가를 반영한 계산');
   await expect(page.getByLabel('필요한 일 평균이 하루 상한을 넘음').first()).toBeVisible();

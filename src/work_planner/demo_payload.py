@@ -424,7 +424,10 @@ def month_payload(
         },
     }
     base["planner"]["insights"] = month_insights(
-        base, now=dt.datetime.combine(DEMO_TODAY, dt.time(12), dt.timezone(dt.timedelta(hours=9)))
+        base, now=dt.datetime.combine(DEMO_TODAY, dt.time(12), dt.timezone(dt.timedelta(hours=9))),
+        projection_constraints={**source, "recognizedBaselineMinutes": total_recognized,
+                                "forecastMinutes": total_recognized + result["plannedAdditionalMinutes"],
+                                "basis": "ledger"},
     )
     return base
 

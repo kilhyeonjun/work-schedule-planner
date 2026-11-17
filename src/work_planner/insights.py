@@ -96,10 +96,31 @@ def _target_progress(payload: dict, today: str) -> dict:
         "targets": targets,
     }
 
-def _constrained_projection(payload: dict, now: dt.datetime, *, leave_now: bool = False) -> tuple[int, int]:
+def _constrained_projection(payload: dict, now: dt.datetime, *, leave_now: bool = False, constraints: dict | None = None) -> tuple[int, int] | None:
     """Compute bounds using the planner's daily/weekly feasibility primitives."""
     from .feasibility import additional_work_bounds
     from .model import parse_work_month
+    if constraints is not None:
+        source = {**constraints, "days": [
+            {**day, "availability": {**day["availability"], "available": False,
+                                     "maxWorkMinutes": day["workedMinutes"]}}
+            if leave_now and day["date"] == now.date().isoformat() else day
+            for day in constraints["days"]
+        ]}
+        if leave_now:
+            source["policy"] = {**source["policy"], "dateOverrides": {
+                date: minutes for date, minutes in source["policy"]["dateOverrides"].items()
+                if date != now.date().isoformat()
+            }}
+        bounds = additional_work_bounds(parse_work_month(source)) if source["days"] else (0, 0)
+        if bounds is None:
+            return None
+        baseline = constraints["recognizedBaselineMinutes"]
+        lower, upper = bounds
+        maximum = baseline + upper
+        if not leave_now and constraints.get("capacityMaximumMinutes") is not None:
+            maximum = constraints["capacityMaximumMinutes"]
+        return baseline + lower, maximum
 
     settings = payload["planner"]["settings"]
     normal = settings.get("normalDayMinutes", min(500, settings["longDayMinutes"]))
@@ -127,7 +148,7 @@ def _constrained_projection(payload: dict, now: dt.datetime, *, leave_now: bool 
             # Same latest-end policy as the recommendation's work windows.
             end = 1180 if settings["longDayMinutes"] == 719 else 400 + settings["longDayMinutes"] + 60 if settings["longDayMinutes"] >= 500 else 960
             if dt.date.fromisoformat(date).weekday() == 4:
-                end = min(end, 960)
+                end = 400 + normal + 60 if normal >= 500 else 960
             time_left = max(0, end - now.hour * 60 - now.minute - bool(now.second or now.microsecond))
             possible = 0
             for floor, ceiling in ((0, 239), (30, 479), (60, cap)):
@@ -159,12 +180,12 @@ def _constrained_projection(payload: dict, now: dt.datetime, *, leave_now: bool 
               "days": rows}
     if not rows:
         return baseline, baseline
-    minimum, maximum = additional_work_bounds(parse_work_month(source))
-    return baseline + minimum, baseline + maximum
+    bounds = additional_work_bounds(parse_work_month(source))
+    return None if bounds is None else (baseline + bounds[0], baseline + bounds[1])
 
 
 
-def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
+def month_insights(payload: dict, *, now: dt.datetime, projection_constraints: dict | None = None) -> dict | None:
     """Derive ledger-basis projections through constrained allocation; naive now is KST."""
     planner = payload.get("planner") or {}
     plan = planner.get("plan")
@@ -251,8 +272,9 @@ def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
     if ledger.get(today, {}).get("day_type") == "workday" and remaining > 0:
         count = len(future)
         before = sum(planned.get(date, {}).get("plannedAdditionalMinutes", 0) for date in future)
-        _, leave_maximum = _constrained_projection(payload, now, leave_now=True)
-        required_total = sum(_recognized_minutes(day) for day in ledger.values()) + before + remaining
+        leave_bounds = _constrained_projection(payload, now, leave_now=True, constraints=projection_constraints)
+        required_total = projection_constraints["forecastMinutes"] if projection_constraints else sum(_recognized_minutes(day) for day in ledger.values()) + before + remaining
+        leave_maximum = leave_bounds[1] if leave_bounds is not None else 0
         shortfall = max(0, required_total - leave_maximum)
         leave_now = {
             "date": today, "workedMinutes": action.get("workedMinutes", ledger[today]["work_minutes"]),
@@ -266,7 +288,8 @@ def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
     recognized = sum(_recognized_minutes(day) for date, day in ledger.items() if date < today)
     today_recognized = _recognized_minutes(ledger[today]) if today in ledger else 0
     current = recognized + today_recognized
-    minimum, maximum = _constrained_projection(payload, now)
+    bounds = _constrained_projection(payload, now, constraints=projection_constraints)
+    minimum, maximum = bounds if bounds is not None else (None, None)
 
     # Same basis as min/max: recorded recognition, confirmed future recognition (paid leave
     # already on the ledger, including full-day leave without a plan row), and the plan's
@@ -277,6 +300,8 @@ def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
         + sum(_recognized_minutes(day) for date, day in ledger.items() if date > today)
         + sum(day.get("plannedAdditionalMinutes", 0) for date, day in planned.items() if date >= today)
     )
+    if projection_constraints is not None:
+        expected = projection_constraints["forecastMinutes"]
     return {
         "asOf": now.isoformat(timespec="minutes")[:16],
         **_target_progress(payload, today),
@@ -287,5 +312,7 @@ def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
             "expectedMinutes": expected,
             "minMinutes": minimum,
             "maxMinutes": maximum,
+            **({"fixedConflict": True} if bounds is None else {}),
+            **({"basis": projection_constraints.get("basis", "target_eligible")} if projection_constraints is not None else {}),
         },
     }

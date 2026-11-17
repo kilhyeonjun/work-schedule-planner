@@ -57,7 +57,7 @@ def verify_constraints(days: tuple[Day, ...], policy: Policy, allocated: dict[st
         result["minimumWorkPassed"] = minimum_ok
     return result
 
-def additional_work_bounds(month: WorkMonth) -> tuple[int, int]:
+def additional_work_bounds(month: WorkMonth) -> tuple[int, int] | None:
     """Exact bounds for optional attendance intervals and fixed dates, by week."""
     baseline = weekly_work_baseline(month.days)
     reachable: dict[str, int] = {}
@@ -79,6 +79,8 @@ def additional_work_bounds(month: WorkMonth) -> tuple[int, int]:
             reachable[week] = updated
         room = max(0, month.policy.weekly_limit_minutes - baseline.get(week, 0))
         reachable[week] &= (1 << (room + 1)) - 1
+    if any(bits == 0 for bits in reachable.values()):
+        return None
     minimum = sum(fixed.values())
-    maximum = sum(max(fixed.get(week, 0), bits.bit_length() - 1) for week, bits in reachable.items())
+    maximum = sum(bits.bit_length() - 1 for bits in reachable.values())
     return minimum, maximum

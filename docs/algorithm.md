@@ -42,20 +42,20 @@ the remaining dates' maximum. Shortfall compares that capacity with the existing
 recommendation total. The displayed daily averages are arithmetic context, not
 the allocation used for feasibility. Weekly caps, Friday caps, full-day leave,
 date overrides and the remaining time today constrain the result.
-Forecast `recognizedMinutes` is completed ledger recognition (dates strictly before
-today) plus today's recorded recognition. Expected minutes add confirmed future
-recognition already on the ledger (paid leave after today, including full-day
-leave without a plan row) and the plan's still unrecorded work
-(`plannedAdditionalMinutes` of plan rows dated today or later) to that current
-recognition. `plan.forecastMinutes` is not used: live plans count
-target-eligible minutes, which exclude deferred remote and unclassified work, so
-that total is not comparable with recognized minutes. Minimum and maximum keep all recorded
-recognition and confirmed leave. The shared daily-cap, attendance-floor and weekly
-baseline primitives define each optional day's interval (zero or minimum-to-cap);
-fixed dates have one allowed value. A per-week reachable-minutes bitset yields
-exact minimum/maximum bounds without repeatedly constructing long recommendations.
-This respects 3,120 weekly work minutes, Friday's normal cap, overrides, leave,
-and today's remaining wall-clock time and statutory break thresholds.
+Forecast `recognizedMinutes` remains ledger recognition through today. Providers
+pass the effective canonical constraint input used by their recommendation.
+The live adapter exports its applied (including auto-trimmed) fixed totals,
+date-specific caps, core-time floors and today's remaining capacity computed by
+the existing `plan.capacity` implementation. It never asks insights to reinterpret
+saved settings. Its expected/bound values use the same target-eligible basis as
+the recommendation, marked `basis: target_eligible`; current ledger recognition
+is separate. Where `plan.capacity` exists, its maximum is authoritative.
+The synthetic demo passes its actual canonical source and uses ledger units.
+The shared feasibility primitives compute per-week reachable amounts. An empty
+reachable set returns null bounds and `fixedConflict: true`, never an infeasible
+fixed total restored as a maximum. UI displays the conflict instead of a range.
+Leave-now removes today's unrecorded work from these same canonical constraints;
+its reference average does not imply an equal split is feasible.
 
 ### Target pace and burn rate
 

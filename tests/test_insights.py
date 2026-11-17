@@ -143,11 +143,15 @@ def test_leave_now_cap_boundary(cap, shortfall):
 
 def test_leave_now_reallocates_instead_of_requiring_equal_shares():
     source = payload()
-    source["planner"]["plan"]["todayAction"]["remainingTodayMinutes"] = 201
-    source["planner"]["plan"]["days"][1]["plannedMinutes"] = 600
+    source["planner"]["plan"]["todayAction"]["remainingTodayMinutes"] = 200
+    source["planner"]["plan"]["days"][1]["plannedAdditionalMinutes"] = 600
+    source["planner"]["plan"]["days"][2]["plannedAdditionalMinutes"] = 300
+    source["planner"]["settings"]["dateOverrides"] = {"2042-03-05": 600}
     leave = month_insights(source, now=NOW)["leaveNow"]
-    assert leave["additionalPerDayMinutes"] == 101
-    assert leave["averageDailyAfterMinutes"] == 501
+    assert leave["additionalPerDayMinutes"] == 100
+    assert leave["averageDailyAfterMinutes"] == 550
+    # Equal +100 violates Thursday's fixed 600; Friday can take all +200.
+    assert 600 + leave["additionalPerDayMinutes"] > 600
     assert leave["shortfallMinutes"] == 0
     assert leave["feasible"] is True
 
