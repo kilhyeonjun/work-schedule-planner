@@ -6,7 +6,7 @@ import json
 import re
 from pathlib import Path
 
-SCAN_DIRS = ("src", "schema", "fixtures", "public", "web", "scripts")
+SCAN_DIRS = ("src", "crates", "schema", "fixtures", "public", "web", "scripts")
 GENERATED_DIRS = {"node_modules", "playwright-report", "test-results"}
 PATTERNS = {
     "absolute_home_path": re.compile(r"(?:/Us" r"ers/|/ho" r"me/)[^\s\"']+"),

@@ -14,7 +14,7 @@ requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/work_planner"]
+packages = ["src/work_planner", "src/work_planner_rust"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

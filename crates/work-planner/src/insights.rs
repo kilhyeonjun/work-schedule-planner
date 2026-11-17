@@ -83,7 +83,7 @@ fn target_progress(payload: &Value, today: &str) -> Value {
         .sum();
     let effective = official + ledger.get(today).map(|d| recognized(d)).unwrap_or(0);
     let planner = &payload["planner"];
-    let options = planner.get("targetOptions");
+    let options = planner.get("targetOptions").filter(|v| !v.is_null());
     let option_minutes: BTreeMap<&str, i64> = rows(options.unwrap_or(&Value::Null))
         .iter()
         .map(|o| (s(o, "key"), n(o, "minutes")))
