@@ -36,7 +36,7 @@ export function CalendarTab(props: TabProps) {
   const [previewPayload, setPreviewPayload] = useState<MonthPayload | null>(null);
   const [previewResult, setPreviewResult] = useState<{selectedLocked?: boolean; adjustments?: {date: string; beforeMinutes: number; afterMinutes: number}[]; targetMinutes?: number; plannedTotalMinutes?: number; gapMinutes?: number; overTargetMinutes?: number; reason?: string | null} | null>(null);
   const [previewToken, setPreviewToken] = useState('');
-  const [closedWeeks, setClosedWeeks] = useState<Set<number>>(new Set());
+  const [weekExpansion, setWeekExpansion] = useState<Record<string, boolean>>({});
   useEffect(() => { setPreviewedMinutes(undefined); setPreviewToken(''); setPreviewResult(null); setOverrideState('idle'); setOverrideMessage(''); }, [selectedDate]);
   useEffect(() => { setPreviewPayload(null); setPreviewResult(null); }, [payload]);
   const displayedPayload = previewPayload || payload;
@@ -85,6 +85,7 @@ export function CalendarTab(props: TabProps) {
   }
   const weeks: CellInfo[][] = [];
   for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+  const defaultWeek = Math.max(0, weeks.findIndex(week => week.some(cell => cell.inMonth && cell.iso === today)));
 
   const planResult = displayedPayload.planner?.plan;
   const actualTotal = cells.reduce((s, c) => s + (c.inMonth && c.row ? Number(c.row.work_minutes || 0) : 0), 0);
@@ -390,19 +391,22 @@ export function CalendarTab(props: TabProps) {
               {weeks.map((week, i) => [...week.map(renderCell), renderWsum(week, i)])}
             </div>
             <div className="cal-mobile-weeks">
-              {weeks.map((week, index) => <section key={index} className="cal-mobile-week">
-                <button className="cal-week-toggle" aria-expanded={!closedWeeks.has(index)} onClick={() => setClosedWeeks(previous => { const next = new Set(previous); if (next.has(index)) next.delete(index); else next.add(index); return next; })}>
+              {weeks.map((week, index) => {
+                const key = `${year}-${month}-${index}`;
+                const open = weekExpansion[key] ?? index === defaultWeek;
+                return <section key={key} className="cal-mobile-week">
+                <button className="cal-week-toggle" aria-expanded={open} onClick={() => setWeekExpansion(previous => ({...previous, [key]: !(previous[key] ?? index === defaultWeek)}))}>
                   <b>{md(week.find(cell => cell.inMonth)?.iso || week[0].iso)} 주</b>
                   <span>인정·계획 {fmt(week.reduce((sum, cell) => sum + (cell.inMonth ? ((cell.row ? recMin(cell.row) : 0) + (cell.plan?.plannedAdditionalMinutes || 0)) : 0), 0))}</span>
-                  <span aria-hidden="true">{closedWeeks.has(index) ? '⌄' : '⌃'}</span>
+                  <span aria-hidden="true">{open ? '⌃' : '⌄'}</span>
                 </button>
                 <div className="cal-week-mini">{week.map(renderCell)}</div>
-                {!closedWeeks.has(index) && <div className="cal-week-list">{week.filter(cell => cell.inMonth && (cell.row || cell.plan)).map(cell => <button key={cell.iso} onClick={() => setSelectedDate(cell.iso)} className="cal-week-row">
+                {open && <div className="cal-week-list">{week.filter(cell => cell.inMonth && (cell.row || cell.plan)).map(cell => <button key={cell.iso} onClick={() => setSelectedDate(cell.iso)} className="cal-week-row">
                   <span>{md(cell.iso)} {cell.row?.weekday || cell.plan?.weekday}</span><span>{cell.plan ? kindLabel(cell.plan.kind) : dayTypeLabel(cell.row?.day_type)}</span>
                   <span>{cell.plan?.window || [cell.row?.first_start, cell.row?.last_end].filter(Boolean).join('–') || '기록 없음'}</span>
                   <b>{fmt(cell.plan?.plannedMinutes ?? (cell.row ? recMin(cell.row) : 0))}</b>
                 </button>)}</div>}
-              </section>)}
+              </section>; })}
             </div>
             <div className="cal-legend mono">
               <span className="cal-legend__li"><span className="cal-legend__sw" style={{background: 'var(--green)'}} />확정 인정 (11:59 대비 채움)</span>

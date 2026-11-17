@@ -48,7 +48,7 @@ export function ThemeControl() {
     media.addEventListener('change', apply);
     return () => media.removeEventListener('change', apply);
   }, [theme]);
-  return <ToggleButtonGroup aria-label="테마" selectionMode="single" disallowEmptySelection selectedKeys={[theme]}
+  return <ToggleButtonGroup className="planner-segments" aria-label="테마" selectionMode="single" disallowEmptySelection selectedKeys={[theme]}
     onSelectionChange={keys => { const next = [...keys][0]; if (next) setTheme(String(next)); }} size="sm">
     {[['auto', '자동'], ['light', '밝게'], ['dark', '어둡게']].map(([key, label]) =>
       <ToggleButton key={key} id={key}>{label}</ToggleButton>)}
@@ -142,10 +142,11 @@ export function CollectButton({payload}: {payload: MonthPayload | null}) {
   const collect = async () => {
     setBusy(true);
     try {
-      const response = await fetch('/api/sync', {method: 'POST', cache: 'no-store'});
+      const response = await fetch('/api/sync', {method: 'POST', cache: 'no-store', credentials: 'same-origin',
+        headers: {'X-Planner-Action': 'sync', 'Content-Type': 'application/json'}, body: '{}'});
       const body: {state: string; retryAfterSeconds?: number} = await response.json();
       if (body.state === 'cooldown') setUntil(Date.now() + (body.retryAfterSeconds || 0) * 1000);
-      setMessage(({started: '수집 시작됨', running: '수집 중', cooldown: '수집 대기', unavailable: '수집 불가'} as Record<string, string>)[body.state] || '수집 불가');
+      setMessage(({started: '수집 시작됨', running: '수집 중', cooldown: '수집 대기', unavailable: '수집 불가', forbidden: '수집 불가'} as Record<string, string>)[body.state] || '수집 불가');
     } catch { setMessage('수집 요청 실패'); }
     finally { setBusy(false); }
   };

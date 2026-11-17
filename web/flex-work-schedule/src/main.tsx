@@ -143,7 +143,7 @@ function App() {
           <span className="statusbar__spacer" />
           {payload?.dataOrigin === 'synthetic' && <span className="statusbar__chip"><span className="dot dot--indigo" />합성 데이터</span>}
           {targetControlsEnabled && !!payload?.planner?.targetOptions?.length && <div className="target-segments">
-            <ToggleButtonGroup aria-label="목표 선택" size="sm" selectionMode="single" disallowEmptySelection selectedKeys={[String(selected)]}
+            <ToggleButtonGroup className="planner-segments" aria-label="목표 선택" size="sm" selectionMode="single" disallowEmptySelection selectedKeys={[String(selected)]}
               onSelectionChange={keys => { const next = [...keys][0]; if (next) setTargetWithHistory(Number(next)); }}>
               {payload.planner.targetOptions.map(option => <ToggleButton key={option.key} id={String(option.minutes)}>{option.label}</ToggleButton>)}
             </ToggleButtonGroup>

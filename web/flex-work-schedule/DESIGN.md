@@ -6,6 +6,8 @@ Approved reference: `../../docs/design/drafts/2026-11-17-planner-redesign/a-*.ht
 
 HeroUI v3 (`@heroui/react` / `@heroui/styles` 3.2.7), the dashboard's React Aria pins, and Tailwind 4.3.4 via the Vite plugin. `src/heroui.css` imports only rendered component sheets: Button, ToggleButton/Group, Chip and Card. Add a sheet there when adding a HeroUI primitive. `index.css` owns shell, theme mapping and the shared strategy panel; each tab owns its layout sheet.
 
+Native button resets stay in `@layer base` so they cannot erase HeroUI component padding/backgrounds. The `planner-segments` group gives targets and desktop themes separately padded pill segments, 3px gaps and accent-soft selection.
+
 The default theme follows the OS. Desktop theme choices (자동/밝게/어둡게) persist under `flex-planner.theme` and react to OS changes in automatic mode. Light and dark both use the HeroUI theme. Text stays in foreground/muted/accent colors; warning/danger status uses dots, chip edges or borders rather than low-contrast colored text. Cards have 20px corners, secondary surfaces 16px, and primary controls pill/12px shapes.
 
 ## Navigation and hierarchy
@@ -18,6 +20,8 @@ At 1024px and above: 220px sticky left menu (오늘/계획/달력/분석/기록)
 - Analysis: cumulative burn-up with separated goal/OT labels, projected trace, selectable after-tax-pay versus long-day comparison, optional min/expected/max forecast bar, pay efficiency and recent trend.
 - Record: archive year/month navigation, actual/leave/recognized totals, four-month trend and paginated daily records. Phone weeks disclose the same page rows with secondary data included.
 
+Default disclosure state keeps the decision compact: Calendar opens only today's week (first week for another month), while Plan opens the current and following week. Manual expansion remains scoped to the viewed month. Four strategy cards occupy one desktop row and a 2×2 phone grid. Today hides minimum-goal remainder only when it duplicates the selected-strategy remainder.
+
 `TargetProgress.tsx` is shared by Today (compact card) and Analysis (desktop comparison columns / phone rows). Four server-owned target facts show current progress against the elapsed-workday marker, burn rate and completed/total workdays, required daily minutes, ETA or month-end shortfall. Analysis adds official/current percentages and projected month-end totals/percentages. An infeasible daily requirement uses a warning dot with neutral text. Four target presets wrap in a full-width mobile segmented group rather than a scrolling strip.
 
 ## State and domain boundaries
@@ -26,7 +30,7 @@ At 1024px and above: 220px sticky left menu (오늘/계획/달력/분석/기록)
 
 The shared strategy panel is the only settings implementation: presets, exact custom target, 1-minute range/steppers, 285-minute floor and baseline reset; changes apply immediately. It preserves Escape, focus trap, inert background, scrim dismissal and focus restoration. Strategy cards only select the shared target.
 
-`planner.insights` is optional: no planner/insights in archive months is normal. Guards, leave-now arithmetic and forecast are server-owned read-model facts, not client reimplementations. Local overrides never write to Flex. The existing preview/save endpoint owns reconciliation and tokens. `POST /api/sync` is shown only for stale or >30-minute collection age outside demo; started/running/cooldown/unavailable are disclosed and cooldown disables repeat requests.
+`planner.insights` is optional: no planner/insights in archive months is normal. Guards, leave-now arithmetic and forecast are server-owned read-model facts, not client reimplementations. Local overrides never write to Flex. The existing preview/save endpoint owns reconciliation and tokens. `POST /api/sync` is shown only for stale or >30-minute collection age outside demo; started/running/cooldown/unavailable are disclosed and cooldown disables repeat requests. Requests use same-origin credentials, `X-Planner-Action: sync`, `Content-Type: application/json` and body `{}`. A forbidden response is displayed as unavailable.
 
 ## Review and checks
 

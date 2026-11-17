@@ -8,7 +8,7 @@ import {OverridePreview} from '../OverridePreview';
 export function PlanTab({payload, loading, selected, setTarget, settings}: TabProps) {
   const [saved, setSaved] = useState<MonthPayload | null>(null);
   const [editing, setEditing] = useState<PlannerDay>();
-  const [closed, setClosed] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   useEffect(() => { setSaved(null); setEditing(undefined); }, [payload, selected, settings]);
   const displayed = saved || payload;
   if (!displayed) return loading ? <Skel className="plan-skeleton" /> : null;
@@ -29,7 +29,11 @@ export function PlanTab({payload, loading, selected, setTarget, settings}: TabPr
     cumulative += day.isToday ? day.plannedMinutes : day.plannedAdditionalMinutes ?? day.plannedMinutes;
     return [day.date, cumulative];
   }));
-  const toggle = (key: string) => setClosed(previous => { const next = new Set(previous); if (next.has(key)) next.delete(key); else next.add(key); return next; });
+  const currentWeek = Math.max(0, weeks.findIndex(week => week.dates?.includes(todayIso())));
+  const defaultOpen = new Set(groups.slice(currentWeek, currentWeek + 2).map(group => group.key));
+  const scope = `${displayed.year}-${displayed.month}`;
+  const isOpen = (key: string) => expanded[`${scope}:${key}`] ?? defaultOpen.has(key);
+  const toggle = (key: string) => setExpanded(previous => ({...previous, [`${scope}:${key}`]: !(previous[`${scope}:${key}`] ?? defaultOpen.has(key))}));
   return <div className="plan-root">
     <Guards payload={displayed} />
     <Card className="plan-strategies">
@@ -51,8 +55,8 @@ export function PlanTab({payload, loading, selected, setTarget, settings}: TabPr
       <div className="row row--between"><h2>추천 근무표</h2><span className="muted">계획 합계 {fmt(plan.plannedTotalMinutes)} · 주말·휴무 숨김</span></div>
       <p className="muted">현재 인정 {fmt(plan.recognizedMinutes)} · 행을 누르면 다른 근무 길이의 월 영향을 확인합니다</p>
       {groups.map(group => <section className="schedule-week" key={group.key}>
-        <button className="schedule-week__toggle" aria-expanded={!closed.has(group.key)} onClick={() => toggle(group.key)}><b>{group.label}</b><span>{fmt(group.projected)} / {fmt(group.limit)}</span><span aria-hidden="true">{closed.has(group.key) ? '⌄' : '⌃'}</span></button>
-        {!closed.has(group.key) && <div className="schedule-rows"><div className="schedule-head"><span>날짜</span><span>구분</span><span>추천 출퇴근</span><span>추가 / 실적 / 휴가</span><span>누적 인정</span></div>
+        <button className="schedule-week__toggle" aria-expanded={isOpen(group.key)} onClick={() => toggle(group.key)}><b>{group.label}</b><span>{fmt(group.projected)} / {fmt(group.limit)}</span><span aria-hidden="true">{isOpen(group.key) ? '⌃' : '⌄'}</span></button>
+        {isOpen(group.key) && <div className="schedule-rows"><div className="schedule-head"><span>날짜</span><span>구분</span><span>추천 출퇴근</span><span>추가 / 실적 / 휴가</span><span>누적 인정</span></div>
           {group.days.map(day => <button key={day.date} className={`schedule-row ${day.isToday ? 'is-today' : ''}`} onClick={() => setEditing(day)} aria-label={`${day.date} 가정 바꾸기`}>
             <span>{Number(day.date.slice(5, 7))}/{Number(day.date.slice(8))} {day.weekday}{day.date === todayIso() ? ' · 오늘' : ''}</span>
             <span className={`kind-tag kind-tag--${day.kind}`}>{day.isDateOverride ? '날짜 고정' : kindLabel(day.kind)}</span>

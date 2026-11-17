@@ -136,7 +136,7 @@ export function TodayTab(props: TabProps) {
                       : <>수집 후 <b>{elapsed}분</b> 경과 · 현재 추정 <b>+{accrual}분</b></>}
                   </div>
                 </div>
-                {minRemaining != null && (
+                {minRemaining != null && minRemaining !== remaining && (
                   <div className="today-tile">
                     <div className="today-tile__k">최소 목표 잔여</div>
                     <div>

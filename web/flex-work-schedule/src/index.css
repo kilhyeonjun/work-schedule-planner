@@ -14,7 +14,8 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 var(--font-sans); }
 button, input { font: inherit; }
-button { color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+/* Native defaults belong below HeroUI's component layer, not above its controls. */
+@layer base { button { color: inherit; background: none; border: 0; padding: 0; cursor: pointer; } }
 button:disabled { cursor: default; opacity: .5; }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--indigo); outline-offset: 3px; }
 .mono, b.mono, input.mono, .num { font-family: var(--font-sans); font-variant-numeric: tabular-nums; letter-spacing: normal; }
@@ -30,6 +31,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--indigo); ou
 .sidebar svg, .tabbar svg { width: 22px; height: 22px; }
 .sidebar__foot { margin-top: auto; display: grid; gap: 12px; font-size: 11px; color: var(--mut); }
 .sidebar__foot p { display: none; }
+.planner-segments { display: inline-flex; gap: 3px; padding: 3px; border-radius: 999px; background: var(--surface-secondary); }
+.planner-segments .toggle-button { border-radius: 999px; min-height: 40px; padding: 8px 12px; background: transparent; }
+.planner-segments .toggle-button[data-selected="true"] { background: var(--accent-soft); color: var(--accent-soft-foreground); }
 .tabbar { display: none; }
 .statusbar { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 28px; min-height: 64px; border-bottom: 1px solid var(--line); background: var(--bg); }
 .statusbar__crumb { display: flex; align-items: baseline; gap: 8px; }
@@ -109,3 +113,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--indigo); ou
   .refresh-error { align-items: flex-start; flex-direction: column; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; } }
+@media (max-width: 1023px) {
+  .target-segments .planner-segments .toggle-button { min-height: 44px; padding-inline: 6px; font-size: 12px; }
+}
