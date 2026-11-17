@@ -2,7 +2,7 @@ import './plan.css';
 import React, {useEffect, useState} from 'react';
 import {Button} from '@heroui/react';
 import {currentRecognized, fmt, kindLabel, krw, MonthPayload, planState, PlannerDay, TabProps, todayIso} from '../lib';
-import {Card, Guards, Skel} from '../ui';
+import {Card, Guards, OfficeMinimum, Skel} from '../ui';
 import {OverridePreview} from '../OverridePreview';
 
 export function PlanTab({payload, loading, selected, setTarget, settings}: TabProps) {
@@ -36,12 +36,13 @@ export function PlanTab({payload, loading, selected, setTarget, settings}: TabPr
   const toggle = (key: string) => setExpanded(previous => ({...previous, [`${scope}:${key}`]: !(previous[`${scope}:${key}`] ?? defaultOpen.has(key))}));
   return <div className="plan-root">
     <Guards payload={displayed} />
+    <OfficeMinimum payload={displayed} />
     <Card className="plan-strategies">
       <h2>목표 전략</h2><p className="muted">고르면 모든 화면에 즉시 반영됩니다 · 정밀 조정은 상단 전략 설정</p>
       <Button className="plan-alternatives-toggle" variant="secondary" aria-expanded={alternativesOpen} aria-controls="plan-alternatives" onPress={() => setAlternativesOpen(open => !open)}>다른 전략 비교</Button>
       <div id="plan-alternatives" className={`plan-stack ${alternativesOpen ? 'is-open' : ''}`}>{planner.comparisons?.map(comparison => <button key={comparison.key} className={`plan-strat ${comparison.targetMinutes === selected ? 'is-selected' : ''}`} aria-pressed={comparison.targetMinutes === selected} onClick={() => setTarget(comparison.targetMinutes)}>
         <span>{comparison.label}{comparison.targetMinutes === selected ? ' · 선택됨' : ''}</span><b>{fmt(comparison.targetMinutes)}</b>
-        <span className="muted">세후 +{krw(comparison.projectedExtraPayAfterTaxKrw)}원 · 긴 날 {comparison.summary?.longDays || 0}회 · {comparison.effortLabel}</span>
+        <span className="muted">추천표 기준 세후 +{krw(comparison.projectedExtraPayAfterTaxKrw)}원 · 긴 날 {comparison.summary?.longDays || 0}회 · {comparison.effortLabel}</span>
         {(comparison.gapMinutes || comparison.capacity?.shortfallMinutes || 0) > 0 && <span>최대 {fmt(comparison.capacity?.maxForecastMinutes ?? comparison.feasibility?.possibleTargetMinutes ?? (comparison.targetMinutes - (comparison.gapMinutes || 0)))}까지 가능</span>}
       </button>)}</div>
       <div className="plan-summary"><span className="chip">{state.label}</span><span>남은 실제 근무 <b>{fmt(plan.remainingMinutes)}</b> · 계획 <b>{fmt(plan.plannedTotalMinutes)}</b> · 목표 산입 예상 <b>{fmt(plan.forecastMinutes ?? ((plan.recognizedMinutes || 0) + (plan.plannedTotalMinutes || 0)))}</b></span></div>
@@ -70,7 +71,8 @@ export function PlanTab({payload, loading, selected, setTarget, settings}: TabPr
     </Card><div className="plan-side"><Card className="plan-method">
       <h2>방식</h2><p className="muted">{planner.strategy?.title}</p><p>{planner.strategy?.message}</p>
       <div className="method-row"><span>보통</span><b>{fmt(settings.normalDayMinutes)}</b></div><div className="method-row"><span>긴 날</span><b>{fmt(settings.longDayMinutes)}</b></div><div className="method-row"><span>단축</span><b>{fmt(settings.shortDayMinutes)}</b></div>
-      <div className="method-row"><span>세후 수당 예상</span><b>+{krw(plan.projectedExtraPayAfterTaxKrw)}원</b></div>
+      {(plan.summary?.longDays || 0) > 0 && <p className="muted">긴 날 {plan.summary?.longDays}회 · {plan.feasibility?.longDayRationale || '보통 근무로 채우지 못한 목표 시간을 긴 날에 모았습니다. 주 52시간·금요일 상한 안에서 배정합니다.'}</p>}
+      <div className="method-row"><span>추천표 기준 세후 수당 예상</span><b>+{krw(plan.projectedExtraPayAfterTaxKrw)}원</b></div>
       <p className="muted">실근무 법정 상한 {fmt(displayed.derived.statutoryMaxMinutes)} · 휴가 인정 +{fmt(displayed.derived.timeOffMinutes)}</p>
     </Card><Card className="plan-method"><h2>주 52시간 상한</h2>{weeks.map(week => <div className="weekly-load" key={week.key}><div className="row row--between"><span>{week.label}</span><b>{fmt(week.projectedActualMinutes)} / {fmt(week.weeklyMaxMinutes || 3120)}</b></div><div className="load-bar"><i style={{width: `${Math.min(100, 100 * (week.projectedActualMinutes || 0) / (week.weeklyMaxMinutes || 3120))}%`}} /></div></div>)}</Card></div></div>
   </div>;

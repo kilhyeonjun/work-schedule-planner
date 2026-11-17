@@ -36,9 +36,13 @@ The shared strategy panel is the only settings implementation: presets, exact cu
 
 Current-basis exclusions explain the current display; classification review is the leading state only when exclusions actually absent from the forecast cover the true-maximum shortfall, not merely the recommendation gap. Otherwise preserve the time-shortage state and explain exclusions in its basis. Remote credit already unlocked by future leave must not be blamed for a capacity gap.
 
-Leave-now explicitly assumes an even split: “균등하게 나누면 하루 +… · 상한 초과 …”. It compares the daily cap only, not real weekly/date-constrained placement. Target progress's warning describes the required daily average exceeding the day cap. The synthetic capacity fixture injects a demo-only date/time and verifies recommendation versus maximum, fixed-OT reasons, target changes and 1440/390 screenshots.
+Leave-now feasibility reruns constrained allocation with today's unrecorded work removed. Its daily average is context, not an equal-split feasibility test. Forecast bounds use weekly/date/Friday/day/time constraints. Target progress says “전일까지 / 오늘 수집 포함”; pace and ETA are explicitly recent-speed estimates.
 
 Calendar renders future partial leave plus planned additional work as a hybrid on desktop, phone mini-cells/list and detail: leave / additional work / expected recognition. Archive calendars without a plan show only confirmed ledger metrics, not zero forecasts or remaining-work metrics. Overrides say “날짜 고정” with the actual window, never a fixed assumed end time. The editor accepts validated `HH:MM–HH:MM` and `HH:MM~HH:MM` source windows. Date, target, settings and source-payload changes reset the editor and invalidate preview tokens, including delayed pending responses.
+
+Today, Plan and Calendar share the “사무실 최소 기준” meter: office work plus approved paid leave through today versus the monthly minimum; future leave only enters the recommendation projection. Before satisfaction, disclose deferred remote credit and the projected satisfaction date (or month-end shortfall). After satisfaction, collapse to a check line. Missing breakdown omits the meter. This rule is independent of plan-state warnings and uses identical markup on mobile.
+
+The mobile header directly exposes target choices. Strategy averages are clamped to the actual target range and reflect the applied target. After 45 minutes or a stale server flag, Today stops elapsed-time accrual; collection values and recommendation-based estimates remain visibly distinct. Analysis's projected trace includes future full-day leave even without a plan row.
 
 
 ## Review and checks

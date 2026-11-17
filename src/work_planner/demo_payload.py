@@ -284,8 +284,8 @@ def month_payload(
                 "badge": "근무일" if date.weekday() < 5 else "주말",
                 "work_minutes": worked,
                 "recognized_minutes": raw["recognizedMinutes"],
-                "office_minutes": worked,
-                "remote_minutes": 0,
+                "office_minutes": max(0, worked - 120) if raw["date"] == "2042-03-03" else worked,
+                "remote_minutes": min(120, worked) if raw["date"] == "2042-03-03" else 0,
                 "timeoff_minutes": leave,
                 "rest_minutes": (30 if ongoing else 60) if worked else 0,
                 "night_minutes": 0,
@@ -313,6 +313,8 @@ def month_payload(
                 "isDateOverride": False,
             }
         )
+    current_office = sum(day["office_minutes"] + day["timeoff_minutes"] for day in days if day["date"] <= DEMO_TODAY.isoformat())
+    projected_office = current_office + sum(day["timeoff_minutes"] for day in days if day["date"] > DEMO_TODAY.isoformat()) + result["plannedAdditionalMinutes"]
     base: dict[str, Any] = {
         "ok": True,
         "dataOrigin": "synthetic",
@@ -390,6 +392,16 @@ def month_payload(
             "recognizedMinutes": total_recognized,
             "sourceRecognizedMinutes": total_recognized,
             "inProgressRecognizedMinutes": 0,
+            "officeMinimum": {
+                "requiredMinutes": 7200,
+                "currentMinutes": current_office,
+                "remainingMinutes": max(0, 7200 - current_office),
+                "satisfied": current_office >= 7200,
+                "projectedMinutes": projected_office,
+                "projectedSatisfied": projected_office >= 7200,
+                "deferredRemoteMinutes": 120 if current_office < 7200 else 0,
+                "remoteCountsAfterMinimum": True,
+            },
             "remainingMinutes": max(0, target - total_recognized),
             "plannedTotalMinutes": result["plannedAdditionalMinutes"],
             "forecastMinutes": total_recognized + result["plannedAdditionalMinutes"],

@@ -8,6 +8,30 @@ export function Card({className = '', children}: {className?: string; children: 
   return <HeroCard className={`card ${className}`}>{children}</HeroCard>;
 }
 
+export function OfficeMinimum({payload}: {payload?: MonthPayload | null}) {
+  const plan = payload?.planner?.plan;
+  const minimum = plan?.officeMinimum;
+  if (!minimum) return null;
+  if (minimum.satisfied) return <Card className="office-minimum"><b>✓ 사무실 최소 기준 충족 · 사무실·휴가 {fmt(minimum.currentMinutes)}</b></Card>;
+  let projected = minimum.currentMinutes;
+  const today = payload?.planner?.insights?.asOf?.slice(0, 10) || new Intl.DateTimeFormat('sv-SE', {timeZone: 'Asia/Seoul'}).format(new Date());
+  const additions = new Map((plan?.days || []).map(day => [day.date, day.plannedAdditionalMinutes ?? day.plannedMinutes ?? 0]));
+  const dates = [...new Set([...(payload?.days || []).map(day => day.date), ...additions.keys()])].sort();
+  let reached: string | undefined;
+  for (const date of dates) {
+    if (date < today) continue;
+    projected += (additions.get(date) || 0) + (date > today ? payload?.days.find(day => day.date === date)?.timeoff_minutes || 0 : 0);
+    if (projected >= minimum.requiredMinutes) { reached = `${Number(date.slice(5, 7))}/${Number(date.slice(8))}`; break; }
+  }
+  return <Card className="office-minimum">
+    <h2>사무실 최소 기준</h2>
+    <p>사무실·휴가 {fmt(minimum.currentMinutes)} / 최소 {fmt(minimum.requiredMinutes)} · {fmt(minimum.remainingMinutes)} 남음</p>
+    <progress aria-label="사무실 최소 기준" value={minimum.currentMinutes} max={Math.max(1, minimum.requiredMinutes)} />
+    <p>재택 {fmt(minimum.deferredRemoteMinutes)}은 최소 기준을 채운 뒤 목표에 들어감</p>
+    <p className="muted">{minimum.projectedSatisfied ? `추천표대로면 ${reached || '월말'}에 충족` : `추천표대로도 월말에 ${fmt(Math.max(0, minimum.requiredMinutes - minimum.projectedMinutes))} 부족`}</p>
+  </Card>;
+}
+
 export function Chip({className = '', children}: {className?: string; children: React.ReactNode}) {
   return <HeroChip className={`chip ${className}`}>{children}</HeroChip>;
 }
@@ -180,11 +204,11 @@ export function StrategySwitcher({payload, selected, setTarget, enabled, dailyAv
   const options: TargetOption[] = payload?.planner?.targetOptions || [];
   const selectedOption = options.find(o => o.minutes === selected);
   const min = Math.max(60, (payload?.derived?.targetMinutes || 0) - 600);
-  const dailyMin = 60;
-  const dailyMax = 24 * 60;
+  const dailyMax = 719;
   const max = 31 * dailyMax;
   const datedWorkdays = new Set(payload?.days?.filter(day => day.day_type === 'workday').map(day => day.date) || []).size;
   const workdayCount = Math.max(1, datedWorkdays || Math.round((payload?.derived?.targetMinutes || selected) / (8 * 60)));
+  const dailyMin = Math.ceil(min / workdayCount);
   const dailyAverage = dailyAverageMinutes || Math.round(selected / workdayCount);
 
   useEffect(() => {
@@ -222,8 +246,9 @@ export function StrategySwitcher({payload, selected, setTarget, enabled, dailyAv
   const applyTarget = (value: number) => setTarget(Math.max(min, Math.min(max, value)));
   const applyDailyAverage = (value: number) => {
     const next = Math.max(dailyMin, Math.min(dailyMax, value));
-    applyTarget(next * workdayCount);
-    setDailyAverageMinutes(next);
+    const target = Math.max(min, Math.min(max, next * workdayCount));
+    setTarget(target);
+    setDailyAverageMinutes(Math.round(target / workdayCount));
   };
   const applySetting = (key: keyof WorkSettings, value: number) =>
     setSettings(clampWorkSettings({...settings, [key]: value}));

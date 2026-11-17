@@ -1,6 +1,6 @@
 import './today.css';
 import React from 'react';
-import {Card, Guards, Skel} from '../ui';
+import {Card, Guards, OfficeMinimum, Skel} from '../ui';
 import {TargetProgress} from '../TargetProgress';
 import {
   currentRecognized, DayRow, TabProps, dayTypeLabel, elapsedSinceSync, fmt, kindLabel, pad, todayIso, useNow,
@@ -42,7 +42,8 @@ export function TodayTab(props: TabProps) {
   const nowHm = new Intl.DateTimeFormat('en-GB', {timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit'}).format(now);
   const syncAt = sync?.lastSyncAt ? new Intl.DateTimeFormat('en-GB', {timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit'}).format(new Date(sync.lastSyncAt)) : '--:--';
   const elapsed = elapsedSinceSync(payload || null, now);
-  const accrual = todayRow?.is_ongoing && !todayRow.is_on_break && todayRow.first_start ? elapsed : 0;
+  const stale = Boolean(sync?.stale || !sync?.lastSyncAt || elapsed > 45);
+  const accrual = !stale && todayRow?.is_ongoing && !todayRow.is_on_break && todayRow.first_start ? elapsed : 0;
 
   const worked = ta?.workedMinutes ?? todayRow?.work_minutes ?? 0;
   const workedEst = worked + accrual;
@@ -69,6 +70,7 @@ export function TodayTab(props: TabProps) {
   return (
     <div className={`today ${payload && loading ? 'is-refreshing' : ''}`}>
       <Guards payload={payload} />
+      <OfficeMinimum payload={payload} />
       <div className="today-grid">
         <div className="today-col">
 
@@ -187,13 +189,13 @@ export function TodayTab(props: TabProps) {
           </Card>
 
           <Card className="today-fresh">
-            <span className={`dot ${sync?.stale ? 'dot--warn' : 'dot--ok'}`} />
+            <span className={`dot ${stale ? 'dot--warn' : 'dot--ok'}`} />
             <span className="today-fresh__t">수집 신선도</span>
             <span className="mono muted">
               마지막 수집 <b className="today-fresh__b">{syncAt}</b> · {elapsed}분 전 ·{' '}
-              <span className={sync?.stale ? 'text-warn' : 'text-ok'}>{sync?.stale ? '오래됨' : '최신'}</span>
+              <span className={stale ? 'text-warn' : 'text-ok'}>{stale ? '오래됨' : '최신'}</span>
             </span>
-            <span className="muted today-fresh__desc">현재 추정은 마지막 수집값에 경과 시간을 더한 값입니다.</span>
+            <span className="muted today-fresh__desc">{stale ? '수집이 오래되어 경과 시간 추정을 멈췄습니다.' : '현재 추정은 수집 이후 경과 시간을 더한 값입니다. 추천·월말 예상·수당은 확정값이 아닙니다.'}</span>
             <span className="chip mono today-fresh__pv">추정 보정 +{fmt(accrual)}</span>
           </Card>
 
@@ -221,8 +223,8 @@ export function TodayTab(props: TabProps) {
             <h2>지금 퇴근하면</h2>
             <p className="muted">오늘 남은 {fmt(leaveNow.todayRemainingMinutes)}을 이후 {leaveNow.remainingWorkdays}일에 균등하게 나누는 가정입니다.</p>
             <div className="leave-now__average"><b>{fmt(leaveNow.averageDailyBeforeMinutes)}</b><span>→</span><b>{fmt(leaveNow.averageDailyAfterMinutes)}</b><span>/ 일</span></div>
-            <p>균등하게 나누면 하루 +{fmt(leaveNow.additionalPerDayMinutes)} · {leaveNow.feasible ? '일 상한 이내' : `상한 초과 ${fmt(leaveNow.shortfallMinutes)}`}</p>
-            <small className="muted">일 상한만 비교한 산술 시뮬레이션 · 주 상한·날짜 고정 등 실제 배정은 미검증 · 저장된 계획은 바뀌지 않습니다</small>
+            <p>균등하게 나누면 하루 +{fmt(leaveNow.additionalPerDayMinutes)} · {leaveNow.feasible ? '남은 날짜에 배치 가능' : `제약 반영 후 부족 ${fmt(leaveNow.shortfallMinutes)}`}</p>
+            <small className="muted">주 52시간·금요일·날짜 고정·휴가를 반영한 계산 · 저장된 계획은 바뀌지 않습니다</small>
           </Card>}
           {upcoming.length > 0 && <Card className="upcoming">
             <h2>다음 일정</h2>
