@@ -38,7 +38,7 @@ export type Plan = {
   status?: string; targetMinutes?: number; recognizedMinutes?: number;
   sourceRecognizedMinutes?: number; inProgressRecognizedMinutes?: number;
   remainingMinutes?: number; plannedTotalMinutes?: number; forecastMinutes?: number; gapMinutes?: number; overTargetMinutes?: number; conflictReason?: string;
-  accounting?: {targetEligibleMinutes?: number; excludedUnknownMinutes?: number; deferredRemoteMinutes?: number};
+  accounting?: {targetEligibleMinutes?: number; currentTargetEligibleMinutes?: number; excludedUnknownMinutes?: number; deferredRemoteMinutes?: number; currentExcludedUnknownMinutes?: number; currentDeferredRemoteMinutes?: number};
   projectedOverFixedMinutes?: number; projectedExtraPayPreTaxKrw?: number; projectedExtraPayAfterTaxKrw?: number;
   summary?: {plannedDays?: number; longDays?: number; normalDays?: number; shortDays?: number; adjustDays?: number;
     averageDailyMinutes?: number; weekly?: WeeklyLoad[]};
@@ -140,12 +140,12 @@ export const currentRecognized = (payload: MonthPayload) => payload.truth?.curre
 export function planState(plan: Plan, payload?: MonthPayload) {
   const gap = plan.gapMinutes ?? plan.feasibility?.gapMinutes ?? 0;
   const over = plan.overTargetMinutes || 0;
-  const unknown = plan.accounting?.excludedUnknownMinutes || 0;
-  const remote = plan.accounting?.deferredRemoteMinutes || 0;
-  const eligible = plan.accounting?.targetEligibleMinutes ?? plan.recognizedMinutes ?? 0;
+  const unknown = plan.accounting?.currentExcludedUnknownMinutes ?? plan.accounting?.excludedUnknownMinutes ?? 0;
+  const remote = plan.accounting?.currentDeferredRemoteMinutes ?? plan.accounting?.deferredRemoteMinutes ?? 0;
+  const eligible = plan.accounting?.currentTargetEligibleMinutes;
   const possible = plan.forecastMinutes ?? ((plan.recognizedMinutes || 0) + (plan.plannedTotalMinutes || 0));
   const basis = [
-    ...(payload ? [`현재 인정 ${fmt(currentRecognized(payload))} 중 목표 산입 ${fmt(eligible)}`] : [`목표 산입 ${fmt(eligible)}`]),
+    ...(payload ? [`현재 인정 ${fmt(currentRecognized(payload))}${eligible != null ? ` 중 목표 산입 ${fmt(eligible)}` : ''}`] : eligible != null ? [`목표 산입 ${fmt(eligible)}`] : []),
     ...(unknown > 0 ? [`미분류 ${fmt(unknown)} 제외`] : []),
     ...(remote > 0 ? [`재택 ${fmt(remote)} 보류`] : []),
   ].join(' · ');

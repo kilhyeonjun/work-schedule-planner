@@ -44,10 +44,14 @@ export function CalendarTab(props: TabProps) {
     const day = payload?.planner?.plan?.days?.find(day => day.date === selectedDate);
     const minutes = day?.plannedMinutes ?? settings.normalDayMinutes;
     setDurationHours(Math.floor(minutes / 60)); setDurationRemainder(minutes % 60);
-    const [start, end] = (day?.window || '06:40–16:00').split('–');
-    setStartTime(start); setEndTime(end || start);
+    const [rawStart, rawEnd] = (day?.window || '').split(/[–~]/).map(value => value.trim());
+    const validTimes = /^([01]\d|2[0-3]):[0-5]\d$/;
+    const validWindow = validTimes.test(rawStart || '') && validTimes.test(rawEnd || '') && rawEnd > rawStart;
+    const start = validWindow ? rawStart : '06:40';
+    const end = validWindow ? rawEnd : '16:00';
+    setStartTime(start); setEndTime(end);
     const clockMinutes = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3));
-    setBreakMinutes(Math.max(0, clockMinutes(end || start) - clockMinutes(start) - minutes));
+    setBreakMinutes(Math.max(0, clockMinutes(end) - clockMinutes(start) - minutes));
     setEditMode('duration'); setLocked(true);
     return () => requestController.current?.abort();
   }, [selectedDate, selected, settings.normalDayMinutes, settings.longDayMinutes, settings.shortDayMinutes, payload]);
@@ -378,15 +382,15 @@ export function CalendarTab(props: TabProps) {
         <Card className={loading ? 'is-refreshing' : ''}>
           <div className="cal-card__h">
             <span className="cal-card__t">{year}년 {month}월</span>
-            <span className="cal-card__sum mono">목표 <b>{fmt(planResult?.targetMinutes)}</b></span>
+            {planResult && <span className="cal-card__sum mono">목표 <b>{fmt(planResult.targetMinutes)}</b></span>}
           </div>
           <div className="cal-metrics mono">
             <span><i>현재 실근무</i><b>{fmt(actualTotal)}</b></span>
             <span><i>현재 인정</i><b>{fmt(recognizedTotal)}</b></span>
-            {planResult && <span><i>목표 산입</i><b>{fmt(planResult.accounting?.targetEligibleMinutes ?? planResult.recognizedMinutes)}</b></span>}
-            {hasInProgressRecognition && <span><i>Flex 월 집계</i><b>{fmt(sourceRecognized)}</b><small>집계 반영 대기 <b>+{fmt(inProgressRecognized)}</b></small></span>}
-            <span><i>남은 실제 근무</i><b>{fmt(remainingTotal)}</b></span>
-            <span className={forecastTotal === Number(planResult?.targetMinutes || 0) ? 'is-ok' : ''}><i>목표 산입 예상</i><b>{fmt(forecastTotal)}</b></span>
+            {planResult?.accounting?.currentTargetEligibleMinutes != null && <span><i>목표 산입</i><b>{fmt(planResult.accounting.currentTargetEligibleMinutes)}</b></span>}
+            {planResult && hasInProgressRecognition && <span><i>Flex 월 집계</i><b>{fmt(sourceRecognized)}</b><small>집계 반영 대기 <b>+{fmt(inProgressRecognized)}</b></small></span>}
+            {planResult && <span><i>남은 실제 근무</i><b>{fmt(remainingTotal)}</b></span>}
+            {planResult && <span className={forecastTotal === Number(planResult.targetMinutes || 0) ? 'is-ok' : ''}><i>목표 산입 예상</i><b>{fmt(forecastTotal)}</b></span>}
           </div>
           {state && <div className={`plan-feas ${state.warning ? 'plan-feas--warn' : ''}`} role={state.warning ? 'alert' : 'status'}>
             <span className="plan-feas__st">{state.label}</span><span>{state.message}</span>{state.hint && <span>{state.hint}</span>}

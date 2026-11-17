@@ -53,7 +53,7 @@ export function PlanTab({payload, loading, selected, setTarget, settings}: TabPr
     {editing && <OverridePreview key={`${editing.date}-${selected}-${settings.normalDayMinutes}-${settings.longDayMinutes}-${settings.shortDayMinutes}`} day={editing} target={selected} settings={settings} onClose={() => setEditing(undefined)} onSave={setSaved} />}
     <div className="plan-layout"><Card className="plan-schedule">
       <div className="row row--between"><h2>추천 근무표</h2><span className="muted">계획 합계 {fmt(plan.plannedTotalMinutes)} · 주말·휴무 숨김</span></div>
-      <p className="muted">현재 인정 {fmt(currentRecognized(displayed))} · 목표 산입 {fmt(plan.accounting?.targetEligibleMinutes ?? plan.recognizedMinutes)} · 행을 누르면 다른 근무 길이의 월 영향을 확인합니다</p>
+      <p className="muted">현재 인정 {fmt(currentRecognized(displayed))}{plan.accounting?.currentTargetEligibleMinutes != null && ` · 목표 산입 ${fmt(plan.accounting.currentTargetEligibleMinutes)}`} · 행을 누르면 다른 근무 길이의 월 영향을 확인합니다</p>
       {groups.map(group => <section className="schedule-week" key={group.key}>
         <button className="schedule-week__toggle" aria-expanded={isOpen(group.key)} onClick={() => toggle(group.key)}><b>{group.label}</b><span>{fmt(group.projected)} / {fmt(group.limit)}</span><span aria-hidden="true">{isOpen(group.key) ? '⌃' : '⌄'}</span></button>
         {isOpen(group.key) && <div className="schedule-rows"><div className="schedule-head"><span>날짜</span><span>구분</span><span>추천 출퇴근</span><span>추가 / 실적 / 휴가</span><span>누적 목표 산입</span></div>
