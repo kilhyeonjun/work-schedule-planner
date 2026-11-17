@@ -212,3 +212,162 @@ def test_demo_attaches_insights_and_route_serializes_them():
     status, _, body = route("GET", "/demo/api/month", "")
     assert status == 200
     assert json.loads(body)["planner"]["insights"] == source["planner"]["insights"]
+
+
+def progress_payload():
+    """Synthetic month exercising official versus in-progress recognition."""
+    source = payload()
+    days = []
+    for number in range(1, 31):
+        date = dt.date(2026, 11, number)
+        workday = date.weekday() < 5
+        recognized = 584 if workday and number < 17 else 0
+        if number == 16:
+            recognized = 582
+        if number == 17:
+            recognized = 430
+        days.append({
+            "date": date.isoformat(), "day_type": "workday" if workday else "weekend",
+            "recognized_minutes": recognized, "work_minutes": recognized,
+            "rest_minutes": 60, "is_ongoing": number == 17,
+        })
+    source["days"] = days
+    source["derived"] = {
+        "recognizedMinutes": 6422, "targetMinutes": 10080,
+        "fixedOtMinutes": 12420, "maxMinutes": 14028,
+    }
+    source["planner"]["settings"]["longDayMinutes"] = 719
+    return source
+
+
+PROGRESS_NOW = dt.datetime(2026, 11, 17, 15, tzinfo=NOW.tzinfo)
+
+
+def test_four_target_progress_synthetic_month():
+    insights = month_insights(progress_payload(), now=PROGRESS_NOW)
+    assert insights["pace"] == {
+        "totalWorkdays": 21, "completedWorkdays": 11,
+        "remainingWorkdays": 10, "expectedPercent": 52.4,
+    }
+    assert insights["burnRateMinutes"] == 584
+    targets = insights["targets"]
+    assert [target["key"] for target in targets] == ["base", "nine_hour", "fixed_ot", "max"]
+    assert [target["label"] for target in targets] == ["8시간(소정)", "9시간", "고정OT", "최대"]
+    assert [target["minutes"] for target in targets] == [10080, 11340, 12420, 14028]
+    assert [target["achievedPercent"] for target in targets] == [68.0, 60.4, 55.2, 48.8]
+    assert [target["officialPercent"] for target in targets] == [63.7, 56.6, 51.7, 45.8]
+    assert [target["requiredDailyMinutes"] for target in targets] == [366, 492, 600, 761]
+    assert [target["requiredFeasible"] for target in targets] == [True, True, True, False]
+    assert [target["etaDate"] for target in targets] == ["2026-11-25", "2026-11-27", None, None]
+    assert [target["projectedMinutes"] for target in targets] == [12262] * 4
+    assert [target["shortfallMinutes"] for target in targets] == [0, 0, 158, 1766]
+    assert [target["projectedPercent"] for target in targets] == [121.6, 108.1, 98.7, 87.4]
+
+
+@pytest.mark.parametrize("ongoing", [True, False])
+def test_progress_ignores_whether_derived_total_includes_today(ongoing):
+    source = progress_payload()
+    source["days"][16]["is_ongoing"] = ongoing
+    expected = month_insights(source, now=PROGRESS_NOW)
+    source["derived"]["recognizedMinutes"] += 430
+    actual = month_insights(source, now=PROGRESS_NOW)
+    for key in ("pace", "burnRateMinutes", "targets"):
+        assert actual[key] == expected[key]
+
+
+def test_demo_separates_completed_and_today_and_uses_target_options():
+    insights = month_payload()["planner"]["insights"]
+    assert insights["burnRateMinutes"] == 540
+    assert [target["minutes"] for target in insights["targets"]] == [7200, 11340, 7800, 9000]
+    base = insights["targets"][0]
+    assert base["officialPercent"] == 7.5
+    assert base["achievedPercent"] == 10.8
+
+
+def test_first_workday_burn_rate_is_unknown_and_projection_stays_official():
+    source = progress_payload()
+    source["derived"]["recognizedMinutes"] = 0
+    now = dt.datetime(2026, 11, 2, 12, tzinfo=NOW.tzinfo)
+    insights = month_insights(source, now=now)
+    assert insights["burnRateMinutes"] is None
+    assert insights["pace"]["completedWorkdays"] == 0
+    assert insights["pace"]["remainingWorkdays"] == 21
+    assert insights["pace"]["expectedPercent"] == 0.0
+    assert all(target["etaDate"] is None for target in insights["targets"])
+    assert all(target["projectedMinutes"] == 0 for target in insights["targets"])
+
+
+@pytest.mark.parametrize("now,eta", [
+    (dt.datetime(2026, 11, 2, 12, tzinfo=NOW.tzinfo), "2026-11-02"),
+    (PROGRESS_NOW, "2026-11-16"),
+])
+def test_already_achieved_target_eta(now, eta):
+    source = progress_payload()
+    source["derived"]["targetMinutes"] = 6000
+    if now.day == 2:
+        source["days"][0]["recognized_minutes"] = 6000  # Completed weekend work counts.
+    target = month_insights(source, now=now)["targets"][0]
+    assert target["etaDate"] == eta
+    assert target["requiredDailyMinutes"] == 0
+    assert target["shortfallMinutes"] == 0
+
+
+def test_no_workdays_and_nonpositive_targets():
+    source = progress_payload()
+    for day in source["days"]:
+        day["day_type"] = "holiday"
+    source["derived"].update(targetMinutes=0, fixedOtMinutes=-1)
+    insights = month_insights(source, now=PROGRESS_NOW)
+    assert insights["pace"] == {
+        "totalWorkdays": 0, "completedWorkdays": 0,
+        "remainingWorkdays": 0, "expectedPercent": 0.0,
+    }
+    assert insights["burnRateMinutes"] is None
+    assert [target["key"] for target in insights["targets"]] == ["max"]
+    target = insights["targets"][0]
+    assert target["requiredDailyMinutes"] == 0
+    assert target["etaDate"] is None
+
+
+def test_target_progress_default_cap_and_kst_boundary():
+    source = progress_payload()
+    source["planner"]["settings"].pop("longDayMinutes")
+    # Progress uses a default cap independently; existing forecast settings still
+    # require explicit planner settings, so exercise the pure progress helper.
+    from work_planner.insights import _target_progress
+
+    assert _target_progress(source, "2026-11-17")["targets"][-1]["requiredFeasible"] is False
+    source["planner"]["settings"]["longDayMinutes"] = 719
+    expected = month_insights(source, now=PROGRESS_NOW)
+    assert month_insights(source, now=PROGRESS_NOW.astimezone(dt.UTC)) == expected
+    source["days"].reverse()
+    assert month_insights(source, now=PROGRESS_NOW) == expected
+
+
+def test_completed_recognition_fallback_includes_weekend_work_and_timeoff():
+    source = progress_payload()
+    source["days"][0].pop("recognized_minutes")
+    source["days"][0].update(work_minutes=60, timeoff_minutes=30)
+    insights = month_insights(source, now=PROGRESS_NOW)
+    assert insights["burnRateMinutes"] == round((6422 + 90) / 11)
+    assert insights["targets"][0]["officialPercent"] == round(6512 / 10080 * 100, 1)
+
+
+def test_option_targets_override_derived_and_keep_fixed_labels():
+    source = progress_payload()
+    source["planner"]["targetOptions"] = [
+        {"key": key, "label": "합성 옵션", "minutes": minutes}
+        for key, minutes in [("target", 9000), ("nine_hour", 11000),
+                             ("fixed_ot", 12000), ("max", 13000)]
+    ]
+    targets = month_insights(source, now=PROGRESS_NOW)["targets"]
+    assert [target["minutes"] for target in targets] == [9000, 11000, 12000, 13000]
+    assert [target["label"] for target in targets] == ["8시간(소정)", "9시간", "고정OT", "최대"]
+
+
+def test_present_options_do_not_fall_back_to_selected_derived_targets():
+    source = progress_payload()
+    source["planner"]["targetOptions"] = [{"key": "target", "minutes": 7200}]
+    targets = month_insights(source, now=PROGRESS_NOW)["targets"]
+    assert [target["key"] for target in targets] == ["base", "nine_hour"]
+    assert [target["minutes"] for target in targets] == [7200, 11340]
