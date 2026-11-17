@@ -9,6 +9,7 @@ export function PlanTab({payload, loading, selected, setTarget, settings}: TabPr
   const [saved, setSaved] = useState<MonthPayload | null>(null);
   const [editing, setEditing] = useState<PlannerDay>();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [alternativesOpen, setAlternativesOpen] = useState(false);
   useEffect(() => { setSaved(null); setEditing(undefined); }, [payload, selected, settings]);
   const displayed = saved || payload;
   if (!displayed) return loading ? <Skel className="plan-skeleton" /> : null;
@@ -38,7 +39,8 @@ export function PlanTab({payload, loading, selected, setTarget, settings}: TabPr
     <Guards payload={displayed} />
     <Card className="plan-strategies">
       <h2>목표 전략</h2><p className="muted">고르면 모든 화면에 즉시 반영됩니다 · 정밀 조정은 상단 전략 설정</p>
-      <div className="plan-stack">{planner.comparisons?.map(comparison => <button key={comparison.key} className={`plan-strat ${comparison.targetMinutes === selected ? 'is-selected' : ''}`} aria-pressed={comparison.targetMinutes === selected} onClick={() => setTarget(comparison.targetMinutes)}>
+      <Button className="plan-alternatives-toggle" variant="secondary" aria-expanded={alternativesOpen} aria-controls="plan-alternatives" onPress={() => setAlternativesOpen(open => !open)}>다른 전략 비교</Button>
+      <div id="plan-alternatives" className={`plan-stack ${alternativesOpen ? 'is-open' : ''}`}>{planner.comparisons?.map(comparison => <button key={comparison.key} className={`plan-strat ${comparison.targetMinutes === selected ? 'is-selected' : ''}`} aria-pressed={comparison.targetMinutes === selected} onClick={() => setTarget(comparison.targetMinutes)}>
         <span>{comparison.label}{comparison.targetMinutes === selected ? ' · 선택됨' : ''}</span><b>{fmt(comparison.targetMinutes)}</b>
         <span className="muted">세후 +{krw(comparison.projectedExtraPayAfterTaxKrw)}원 · 긴 날 {comparison.summary?.longDays || 0}회 · {comparison.effortLabel}</span>
       </button>)}</div>

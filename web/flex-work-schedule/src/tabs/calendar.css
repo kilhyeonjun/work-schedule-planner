@@ -74,7 +74,7 @@
   .cal-mobile-week:first-child { border-top: 0; }
   .cal-week-toggle { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; text-align: left; }
   .cal-week-toggle b { flex: 1; } .cal-week-toggle span { font-size: 12px; color: var(--mut); }
-  .cal-week-mini { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .cal-week-mini { display: grid; grid-template-columns: repeat(7, minmax(44px, 1fr)); gap: 4px; overflow-x: auto; }
   .cal-week-mini .cal-cell { min-height: 64px; padding: 5px 3px; border-radius: 10px; }
   .cal-week-mini .cal-cell__v { font-size: 11px; } .cal-week-mini .cal-cell__d { font-size: 10px; }
   .cal-week-mini .cal-kind, .cal-week-mini .cal-vchip, .cal-week-mini .cal-cell__td, .cal-week-mini .cal-cell__off, .cal-week-mini .cal-fill { display: none; }

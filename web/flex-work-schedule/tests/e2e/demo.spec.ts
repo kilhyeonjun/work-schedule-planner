@@ -307,17 +307,43 @@ for (const viewport of [{width: 1440, height: 1000}, {width: 390, height: 844}])
         await expect(disclosures.nth(0)).toHaveAttribute('aria-expanded', 'false');
         await expect(disclosures.nth(1)).toHaveAttribute('aria-expanded', 'true');
         await expect(disclosures.nth(2)).toHaveAttribute('aria-expanded', 'true');
-        const cards = await page.locator('.plan-strat').evaluateAll(nodes => nodes.map(node => {
-          const rect = node.getBoundingClientRect(); return {x: rect.x, y: rect.y};
-        }));
-        expect(new Set(cards.map(card => card.y)).size).toBe(viewport.width < 1024 ? 2 : 1);
-        expect(new Set(cards.map(card => card.x)).size).toBe(viewport.width < 1024 ? 2 : 4);
+        if (viewport.width < 1024) {
+          const comparison = page.getByRole('button', {name: '다른 전략 비교'});
+          await expect(comparison).toHaveAttribute('aria-expanded', 'false');
+          await expect(page.locator('.plan-strat.is-selected')).toBeVisible();
+          const selectedY = await page.locator('.plan-strat.is-selected').evaluate(node => node.getBoundingClientRect().top);
+          const comparisonY = await comparison.evaluate(node => node.getBoundingClientRect().top);
+          expect(selectedY).toBeLessThan(comparisonY);
+          await expect(page.locator('.plan-summary')).toBeInViewport();
+          for (const alternative of await page.locator('.plan-strat:not(.is-selected)').all()) await expect(alternative).not.toBeVisible();
+          await comparison.click();
+          await expect(comparison).toHaveAttribute('aria-expanded', 'true');
+          for (const alternative of await page.locator('.plan-strat').all()) await expect(alternative).toBeVisible();
+          const cards = await page.locator('.plan-strat').evaluateAll(nodes => nodes.map(node => {
+            const rect = node.getBoundingClientRect(); return {x: rect.x, y: rect.y};
+          }));
+          expect(new Set(cards.map(card => card.y)).size).toBe(4);
+          expect(new Set(cards.map(card => card.x)).size).toBe(1);
+          await comparison.click();
+          await expect(comparison).toHaveAttribute('aria-expanded', 'false');
+        } else {
+          const cards = await page.locator('.plan-strat').evaluateAll(nodes => nodes.map(node => {
+            const rect = node.getBoundingClientRect(); return {x: rect.x, y: rect.y};
+          }));
+          expect(new Set(cards.map(card => card.y)).size).toBe(1);
+          expect(new Set(cards.map(card => card.x)).size).toBe(4);
+        }
         await page.screenshot({path: `test-results/draft-a-plan-${viewport.width}.png`, fullPage: true});
         await disclosures.nth(0).click();
         await expect(disclosures.nth(0)).toHaveAttribute('aria-expanded', 'true');
       }
       if (label === '달력' && viewport.width < 1024) {
         await expect(page.locator('.cal-week-toggle[aria-expanded="true"]')).toHaveCount(1);
+        const dayBoxes = await page.locator('.cal-mobile-weeks button.cal-cell').evaluateAll(nodes => nodes.map(node => {
+          const rect = node.getBoundingClientRect(); return {width: rect.width, height: rect.height};
+        }));
+        expect(dayBoxes.length).toBeGreaterThan(0);
+        expect(dayBoxes.every(box => box.width >= 44 && box.height >= 44)).toBe(true);
         await expect(page.locator('.cal-week-toggle[aria-expanded="true"]')).toContainText('3/3 주');
         await expect(page.locator('.cal-week-list')).toHaveCount(1);
         await page.screenshot({path: 'test-results/draft-a-calendar-390.png', fullPage: true});
