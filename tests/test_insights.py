@@ -141,15 +141,15 @@ def test_leave_now_cap_boundary(cap, shortfall):
     assert leave["shortfallMinutes"] == shortfall
 
 
-def test_leave_now_checks_each_day_not_just_average_and_rounds_even_shares():
+def test_leave_now_reallocates_instead_of_requiring_equal_shares():
     source = payload()
     source["planner"]["plan"]["todayAction"]["remainingTodayMinutes"] = 201
     source["planner"]["plan"]["days"][1]["plannedMinutes"] = 600
     leave = month_insights(source, now=NOW)["leaveNow"]
     assert leave["additionalPerDayMinutes"] == 101
     assert leave["averageDailyAfterMinutes"] == 501
-    assert leave["shortfallMinutes"] == 101
-    assert leave["feasible"] is False
+    assert leave["shortfallMinutes"] == 0
+    assert leave["feasible"] is True
 
 
 def test_leave_now_no_future_workdays():
@@ -180,7 +180,7 @@ def test_forecast_uses_slot_capacity_not_selected_target_feasibility(maximum):
         source["planner"]["plan"]["feasibility"] = {"possibleTargetMinutes": maximum}
     assert month_insights(source, now=NOW)["forecast"] == {
         "recognizedMinutes": 720, "expectedMinutes": 1720,
-        "minMinutes": 1335, "maxMinutes": 2280,
+        "minMinutes": 720, "maxMinutes": 2160,
     }
 
 
@@ -188,15 +188,15 @@ def test_forecast_excludes_holidays_and_includes_unplanned_workdays():
     source = payload()
     source["days"][2]["day_type"] = "holiday"
     source["planner"]["plan"]["days"] = source["planner"]["plan"]["days"][:1]
-    assert month_insights(source, now=NOW)["forecast"]["minMinutes"] == 1050
+    assert month_insights(source, now=NOW)["forecast"]["minMinutes"] == 720
 
 
 @pytest.mark.parametrize("worked,day_type,minimum,maximum", [
-    (240, "workday", 1335, 2280),
-    (285, "workday", 1335, 2280),
+    (240, "workday", 720, 2160),
+    (285, "workday", 765, 2180),
     # Recorded time beyond the long-day cap and holiday work are kept, never dropped.
-    (650, "workday", 1700, 2330),
-    (240, "holiday", 1290, 1920),
+    (650, "workday", 1130, 2230),
+    (240, "holiday", 720, 1820),
 ])
 def test_forecast_keeps_today_recorded_time_and_adds_only_unrecorded_capacity(
     worked, day_type, minimum, maximum,
@@ -472,7 +472,7 @@ def test_anchored_today_expected_counts_recorded_today_once_in_recognized_units(
     )["forecast"]
     assert forecast == {
         "recognizedMinutes": 13612, "expectedMinutes": 14112,
-        "minMinutes": 13897, "maxMinutes": 14379,
+        "minMinutes": 13612, "maxMinutes": 14272,
     }
 
 
@@ -508,3 +508,30 @@ def test_future_ledger_rows_may_omit_zero_work_minutes():
         if day["date"] > NOW.date().isoformat():
             del day["work_minutes"]
     assert month_insights(source, now=NOW) == expected
+
+def test_forecast_and_leave_now_respect_weekly_room_and_fixed_slots():
+    source = payload()
+    source["days"][0]["work_minutes"] = 2800
+    source["planner"]["settings"]["dateOverrides"] = {"2042-03-05": 0}
+    insights = month_insights(source, now=NOW)
+    # Only 80 weekly minutes remain, less than Friday's attendance minimum.
+    assert insights["forecast"]["maxMinutes"] <= 3120
+    assert insights["leaveNow"]["feasible"] is False
+    assert insights["leaveNow"]["shortfallMinutes"] > 0
+
+
+def test_forecast_includes_future_full_day_leave_once_and_no_work_on_that_date():
+    source = payload()
+    source["days"][2].update(timeoff_minutes=480, recognized_minutes=480)
+    source["planner"]["settings"]["dateOverrides"] = {"2042-03-07": 0}
+    insights = month_insights(source, now=NOW)
+    assert insights["forecast"]["minMinutes"] == 1200
+    assert insights["forecast"]["maxMinutes"] == 1540
+
+
+def test_forecast_late_today_keeps_recorded_work_without_impossible_extension():
+    source = payload()
+    source["days"] = source["days"][:2]
+    late = NOW.replace(hour=23)
+    forecast = month_insights(source, now=late)["forecast"]
+    assert forecast["minMinutes"] == forecast["maxMinutes"] == 720

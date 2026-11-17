@@ -37,11 +37,11 @@ first start and last end (recorded rest, gaps between work blocks, and leave in
 between; overnight spans wrap), never less than recorded rest. Ongoing today rest
 is a risk; past-day rest is a breach.
 
-Leaving now projects today's remaining work evenly onto future workdays, assigning
-indivisible minutes in ISO-date order. A day exceeding the configured long-day
-cap contributes its overflow to the shortfall; no remaining workdays means all
-of today's remainder is a shortfall. Displayed averages round up to whole minutes.
-This is arithmetic, not a new constrained plan or a guarantee about weekly caps.
+Leaving now removes today's unrecorded work and asks the constrained planner for
+the remaining dates' maximum. Shortfall compares that capacity with the existing
+recommendation total. The displayed daily averages are arithmetic context, not
+the allocation used for feasibility. Weekly caps, Friday caps, full-day leave,
+date overrides and the remaining time today constrain the result.
 Forecast `recognizedMinutes` is completed ledger recognition (dates strictly before
 today) plus today's recorded recognition. Expected minutes add confirmed future
 recognition already on the ledger (paid leave after today, including full-day
@@ -50,10 +50,11 @@ leave without a plan row) and the plan's still unrecorded work
 recognition. `plan.forecastMinutes` is not used: live plans count
 target-eligible minutes, which exclude deferred remote and unclassified work, so
 that total is not comparable with recognized minutes. Minimum and maximum keep all recorded
-time (including holiday work and time beyond a day cap) and add short-day/long-day
-capacity for every future workday, plus today's unrecorded capacity
-(`max(0, cap − today's recorded)`) when today is a workday. Selected-target
-feasibility is never a forecast capacity bound.
+recognition and confirmed leave, then use the common constraint engine with zero
+additional target and an unreachable target respectively. Optional attendance
+may be zero at the lower bound; fixed dates remain fixed. Capacity respects
+3,120 weekly work minutes, Friday's normal cap, daily maxima, overrides, leave,
+and today's remaining wall-clock time and statutory break thresholds.
 
 ### Target pace and burn rate
 
@@ -100,3 +101,16 @@ required rest in `H:MM`. Breaches precede risks; each severity sorts by date
 
 Weekly aggregation treats omitted zero-valued work minutes on future ledger rows
 as zero, matching the public read model's sparse future-day representation.
+
+### Office minimum and pay
+
+`plan.officeMinimum` is null without a work-form breakdown. Otherwise its current
+basis is office work plus paid leave on ledger dates through today, including
+today's recorded work but excluding future leave. Required minutes are the
+agreed monthly minimum, independent of the selected target. Remaining minutes
+are clamped at zero. Projection adds recommended unrecorded office work and
+approved future paid leave once. Remote work is deferred until this minimum is
+met; unknown work never unlocks it. Today, Plan and Calendar share this rule.
+Expected pay uses recommendation forecast minutes, not an unreachable requested
+target; the UI labels it as a recommendation-based estimate.
+
