@@ -114,7 +114,7 @@ def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
                 continue
             week_year, week_number, _ = parsed.isocalendar()
             key = f"{week_year}-W{week_number:02d}"
-            weekly_totals[key] = weekly_totals.get(key, 0) + day[field]
+            weekly_totals[key] = weekly_totals.get(key, 0) + day.get(field, 0)
     for key, minutes in sorted(weekly_totals.items()):
         limit = weekly_limits.get(key, 3120)
         if minutes >= limit - 240:

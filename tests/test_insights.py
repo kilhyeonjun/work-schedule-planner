@@ -473,3 +473,12 @@ def test_completed_week_breach_without_plan_rows_and_outside_month_is_excluded()
         "key": "weekly_max", "level": "breach", "weekKey": "2042-W09",
         "label": "3/1–3/2 주 52시간 0:01 초과 예상", "minutes": 3121, "limitMinutes": 3120,
     }]
+
+
+def test_future_ledger_rows_may_omit_zero_work_minutes():
+    source = payload()
+    expected = month_insights(source, now=NOW)
+    for day in source["days"]:
+        if day["date"] > NOW.date().isoformat():
+            del day["work_minutes"]
+    assert month_insights(source, now=NOW) == expected
