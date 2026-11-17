@@ -1,11 +1,12 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
+import {Button, ToggleButton, ToggleButtonGroup} from '@heroui/react';
 import './index.css';
 import {
   clampWorkSettings, currentUrlState, initialDailyAverage, initialSelectedDate, initialTab, initialTarget, initialWorkSettings,
   defaultWorkSettings, nowDate, numParam, pad, plannerPreferences, savePlannerPreferences, syncUrl, useArchive, useMonthData, WorkSettings,
 } from './lib';
-import {Card, Sidebar, StrategySwitcher, SyncChip, TabBar, TABS} from './ui';
+import {Card, CollectButton, Sidebar, StrategySwitcher, SyncChip, TabBar, TABS} from './ui';
 import {TodayTab} from './tabs/Today';
 import {PlanTab} from './tabs/Plan';
 import {CalendarTab} from './tabs/Calendar';
@@ -13,8 +14,8 @@ import {AnalysisTab} from './tabs/Analysis';
 import {RecordTab} from './tabs/Record';
 
 const TAB_TITLES: Record<string, string> = {
-  today: '오늘', plan: '계획 / 전략 스튜디오', calendar: '캘린더 / 월 그리드',
-  analysis: '분석 / 월간 리포트', archive: '기록 / 아카이브',
+  today: '오늘', plan: '계획', calendar: '달력',
+  analysis: '분석', archive: '기록',
 };
 
 function App() {
@@ -131,22 +132,32 @@ function App() {
       <div className="shell__main">
         <header className="statusbar">
           <span className="statusbar__crumb">
-            ❯ <h1>{TAB_TITLES[activeTab] || activeTab}</h1>
-            <span className="accent">{year}−{pad(month)}</span>
+            <h1>{TAB_TITLES[activeTab] || activeTab}</h1>
+            <span className="as-of">{(payload?.planner?.insights?.asOf || payload?.collectedAt || '').slice(11, 16) || '--:--'} 기준</span>
           </span>
           <span className="statusbar__nav">
             <button className="statusbar__navbtn" onClick={() => move(-1)} aria-label="이전 달">‹</button>
-            <button className="statusbar__navbtn" onClick={goCurrent}>이번 달</button>
+            <button className="statusbar__navbtn" onClick={goCurrent}>{year}년 {month}월</button>
             <button className="statusbar__navbtn" onClick={() => move(1)} aria-label="다음 달">›</button>
           </span>
           <span className="statusbar__spacer" />
           {payload?.dataOrigin === 'synthetic' && <span className="statusbar__chip"><span className="dot dot--indigo" />합성 데이터</span>}
+          {targetControlsEnabled && !!payload?.planner?.targetOptions?.length && <div className="target-segments">
+            <ToggleButtonGroup aria-label="목표 선택" size="sm" selectionMode="single" disallowEmptySelection selectedKeys={[String(selected)]}
+              onSelectionChange={keys => { const next = [...keys][0]; if (next) setTargetWithHistory(Number(next)); }}>
+              {payload.planner.targetOptions.map(option => <ToggleButton key={option.key} id={String(option.minutes)}>{option.label}</ToggleButton>)}
+            </ToggleButtonGroup>
+          </div>}
           <StrategySwitcher payload={payload} selected={selected} setTarget={setTargetWithHistory} enabled={targetControlsEnabled}
             dailyAverageMinutes={dailyAverageMinutes} setDailyAverageMinutes={setDailyAverageMinutes}
             settings={settings} setSettings={setSettingsWithHistory} loading={loading} baseline={strategyBaseline.current} />
           <SyncChip payload={payload} archiveMode={archiveMode} />
+          {!!payload?.planner?.insights?.guards.length && <span className="statusbar__chip guard-count"><span className="dot dot--warn" />제약 {payload.planner.insights.guards.length}건</span>}
+          <CollectButton payload={payload} />
+          <Button variant="ghost" size="sm" isDisabled={loading} onPress={() => { retryMonth(); retryArchive(); }}>{loading ? '업데이트 중' : '새로 고침'}</Button>
         </header>
         <main className="content">
+          {payload && loading && <p className="updating" role="status">업데이트 중 · 이전 결과를 표시합니다</p>}
           {archiveMode && payload && (
             <div className="archive-notice">
               <span className="chip chip--warn">아카이브</span>

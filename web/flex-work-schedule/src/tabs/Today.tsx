@@ -1,6 +1,7 @@
 import './today.css';
 import React from 'react';
-import {Card, Skel} from '../ui';
+import {Card, Guards, Skel} from '../ui';
+import {TargetProgress} from '../TargetProgress';
 import {
   DayRow, TabProps, dayTypeLabel, elapsedSinceSync, fmt, kindLabel, pad, todayIso, useNow,
 } from '../lib';
@@ -38,8 +39,8 @@ export function TodayTab(props: TabProps) {
   const dateLabel = `${md(iso)} ${todayRow?.weekday || ''}`.trim();
 
   const sync = payload?.sync;
-  const syncAt = sync?.lastSyncAt ? String(sync.lastSyncAt).slice(11, 16) : '--:--';
-  const nowHm = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const nowHm = new Intl.DateTimeFormat('en-GB', {timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit'}).format(now);
+  const syncAt = sync?.lastSyncAt ? new Intl.DateTimeFormat('en-GB', {timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit'}).format(new Date(sync.lastSyncAt)) : '--:--';
   const elapsed = elapsedSinceSync(payload || null, now);
   const accrual = todayRow?.is_ongoing && !todayRow.is_on_break && todayRow.first_start ? elapsed : 0;
 
@@ -62,9 +63,12 @@ export function TodayTab(props: TabProps) {
   const partialTimeoff = ta?.kind === 'partial_timeoff' ||
     ((plannerToday?.timeoffMinutes || 0) > 0 && (plannerToday?.plannedAdditionalMinutes || 0) > 0);
   const notifItems = payload?.notifications?.items || [];
+  const leaveNow = payload?.planner?.insights?.leaveNow;
+  const upcoming = (plan?.days || []).filter(day => day.date > iso && day.plannedMinutes > 0).slice(0, 3);
 
   return (
     <div className={`today ${payload && loading ? 'is-refreshing' : ''}`}>
+      <Guards payload={payload} />
       <div className="today-grid">
         <div className="today-col">
 
@@ -212,6 +216,21 @@ export function TodayTab(props: TabProps) {
               </div>
             </div>
           </Card>
+          <TargetProgress insights={payload?.planner?.insights} />
+          {leaveNow && <Card className="leave-now">
+            <h2>지금 퇴근하면</h2>
+            <p className="muted">오늘 남은 {fmt(leaveNow.todayRemainingMinutes)}을 이후 {leaveNow.remainingWorkdays}일에 나눕니다.</p>
+            <div className="leave-now__average"><b>{fmt(leaveNow.averageDailyBeforeMinutes)}</b><span>→</span><b>{fmt(leaveNow.averageDailyAfterMinutes)}</b><span>/ 일</span></div>
+            <p>하루 +{fmt(leaveNow.additionalPerDayMinutes)} · {leaveNow.feasible ? '배치 가능' : `배치 부족 ${fmt(leaveNow.shortfallMinutes)}`}</p>
+            <small className="muted">산술 시뮬레이션 · 저장된 계획은 바뀌지 않습니다</small>
+          </Card>}
+          {upcoming.length > 0 && <Card className="upcoming">
+            <h2>다음 일정</h2>
+            {upcoming.map(day => <div className="upcoming__row" key={day.date}>
+              <span className={`kind-tag kind-tag--${day.kind}`}>{kindLabel(day.kind)}</span>
+              <span>{md(day.date)} {day.weekday}</span><span>{day.window}</span><b>{fmt(day.plannedMinutes)}</b>
+            </div>)}
+          </Card>}
 
           <Card className="today-notif">
             <div className="today-card-h">

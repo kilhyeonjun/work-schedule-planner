@@ -1,0 +1,35 @@
+.target-progress { padding: 20px 22px; }
+.target-progress__header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin-bottom: 12px; }
+.target-progress__header h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.target-progress__header > span { font-size: 12px; }
+.target-progress__row { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; padding: 14px 0; border-top: 1px solid var(--line); font-size: 12px; }
+.target-progress__name { display: flex; align-items: baseline; gap: 8px; }
+.target-progress__name span { color: var(--mut); }
+.target-progress__meter { display: flex; align-items: center; gap: 8px; grid-row: 2; grid-column: 1 / -1; }
+.target-progress__meter > span { min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+.target-progress__bar { flex: 1; position: relative; height: 8px; background: var(--surface-secondary); border-radius: 999px; margin-inline: 2px; }
+.target-progress__bar > span { display: block; height: 100%; border-radius: inherit; background: var(--green); }
+.target-progress__bar i { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); opacity: .65; }
+.target-progress__outcome { grid-row: 3; grid-column: 1; color: var(--mut); font-size: 11px; }
+.target-progress__required { grid-row: 3; grid-column: 2; display: flex; align-items: center; gap: 5px; font-size: 11px; }
+.target-progress__legend { margin: 6px 0 0; font-size: 10px; }
+.target-progress__columns { display: none; }
+.target-progress--detailed .target-progress__official { grid-row: 3; grid-column: 1 / -1; }
+.target-progress--detailed .target-progress__outcome { grid-row: 4; }
+.target-progress--detailed .target-progress__required { grid-row: 4; }
+@media (min-width: 1024px) {
+  .target-progress--detailed .target-progress__columns, .target-progress--detailed .target-progress__row { display: grid; grid-template-columns: 100px minmax(100px, 1fr) 85px 120px 85px; gap: 12px; align-items: center; }
+  .target-progress--detailed .target-progress__columns { color: var(--mut); font-size: 11px; padding: 10px 0; }
+  .target-progress--detailed .target-progress__row > div { grid-row: auto; grid-column: auto; }
+  .target-progress--detailed .target-progress__name { flex-direction: column; gap: 3px; }
+  .target-progress--detailed .target-progress__official > span { display: none; }
+  .target-progress--detailed .target-progress__required { white-space: nowrap; }
+}
+@media (max-width: 1023px) { .target-progress { padding: 16px; } }
+/* Four server-owned presets remain visible without a horizontal strip on phones. */
+@media (max-width: 1023px) {
+  .statusbar .target-segments { display: flex; width: 100%; order: 7; }
+  .target-segments > div { width: 100%; }
+  .target-segments button { flex: 1; min-width: 0; padding-inline: 6px; font-size: 12px; }
+  .switcher__presets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

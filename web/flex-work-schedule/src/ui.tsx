@@ -1,14 +1,15 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
+import {Button, Card as HeroCard, Chip as HeroChip, ToggleButton, ToggleButtonGroup} from '@heroui/react';
 import {
   clampWorkSettings, defaultWorkSettings, elapsedSinceSync, fmt, MonthPayload, TargetOption, useNow, WorkSettings,
 } from './lib';
 
 export function Card({className = '', children}: {className?: string; children: React.ReactNode}) {
-  return <div className={`card ${className}`}>{children}</div>;
+  return <HeroCard className={`card ${className}`}>{children}</HeroCard>;
 }
 
 export function Chip({className = '', children}: {className?: string; children: React.ReactNode}) {
-  return <span className={`chip ${className}`}>{children}</span>;
+  return <HeroChip className={`chip ${className}`}>{children}</HeroChip>;
 }
 
 export function Skel({className = ''}: {className?: string}) {
@@ -20,26 +21,58 @@ export function Dot({color}: {color: string}) {
 }
 
 export const TABS: [string, string][] = [
-  ['today', '오늘'], ['plan', '계획'], ['calendar', '캘린더'], ['analysis', '분석'], ['archive', '기록'],
+  ['today', '오늘'], ['plan', '계획'], ['calendar', '달력'], ['analysis', '분석'], ['archive', '기록'],
 ];
+
+const ICONS: Record<string, React.ReactNode> = {
+  today: <><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3 2" /></>,
+  plan: <path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2" />,
+  calendar: <><rect x="3.5" y="5" width="17" height="15" rx="3" /><path d="M4 10h16M8 3v4M16 3v4" /></>,
+  analysis: <path d="M4 20h16M7 16v-5M12 16V7M17 16v-8" />,
+  archive: <><rect x="4" y="4" width="16" height="5" rx="1.5" /><path d="M5 9v11h14V9M10 13h4" /></>,
+};
+function NavIcon({tab}: {tab: string}) {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">{ICONS[tab]}</svg>;
+}
+export function ThemeControl() {
+  const [theme, setTheme] = useState(() => { try { return localStorage.getItem('flex-planner.theme') || 'auto'; } catch { return 'auto'; } });
+  useEffect(() => {
+    const media = matchMedia('(prefers-color-scheme: dark)');
+    const apply = () => {
+      const dark = theme === 'dark' || (theme === 'auto' && media.matches);
+      document.documentElement.classList.toggle('dark', dark);
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    };
+    apply();
+    try { localStorage.setItem('flex-planner.theme', theme); } catch { /* Storage can be disabled. */ }
+    media.addEventListener('change', apply);
+    return () => media.removeEventListener('change', apply);
+  }, [theme]);
+  return <ToggleButtonGroup aria-label="테마" selectionMode="single" disallowEmptySelection selectedKeys={[theme]}
+    onSelectionChange={keys => { const next = [...keys][0]; if (next) setTheme(String(next)); }} size="sm">
+    {[['auto', '자동'], ['light', '밝게'], ['dark', '어둡게']].map(([key, label]) =>
+      <ToggleButton key={key} id={key}>{label}</ToggleButton>)}
+  </ToggleButtonGroup>;
+}
 
 export function Sidebar({tab, setTab, tabs}: {tab: string; setTab: (t: string) => void; tabs: [string, string][]}) {
   return (
     <aside className="sidebar">
       <div className="sidebar__brand">
-        <div className="sidebar__logo">❯ flex-planner</div>
-        <div className="sidebar__sub mono">v4 · read-only</div>
+        <div className="sidebar__sub">FLEX</div>
+        <div className="sidebar__logo">근무 플래너</div>
       </div>
       <nav className="sidebar__nav">
-        {tabs.map(([k, label], i) => (
+        {tabs.map(([k, label]) => (
           <button key={k} className={`sidebar__item ${tab === k ? 'is-active' : ''}`}
             aria-current={tab === k ? 'page' : undefined} onClick={() => setTab(k)}>
-            <span className="mono sidebar__num">{String(i + 1).padStart(2, '0')}</span>{label}
+            <NavIcon tab={k} />{label}
           </button>
         ))}
       </nav>
       <div className="sidebar__foot">
-        <div>● 읽기 전용</div>
+        <div>읽기 전용 · Flex 기록 변경 없음</div>
+        <ThemeControl />
         <p>출퇴근 기록은 서버 수집값 기준. 이 화면에서 편집할 수 없습니다.</p>
       </div>
     </aside>
@@ -49,10 +82,10 @@ export function Sidebar({tab, setTab, tabs}: {tab: string; setTab: (t: string) =
 export function TabBar({tab, setTab, tabs}: {tab: string; setTab: (t: string) => void; tabs: [string, string][]}) {
   return (
     <nav className="tabbar">
-      {tabs.map(([k, label], i) => (
+      {tabs.map(([k, label]) => (
         <button key={k} className={`tabbar__item ${tab === k ? 'is-active' : ''}`}
           aria-current={tab === k ? 'page' : undefined} onClick={() => setTab(k)}>
-          <span className="mono tabbar__num">{String(i + 1).padStart(2, '0')}</span>
+          <NavIcon tab={k} />
           <span>{label}</span>
         </button>
       ))}
@@ -64,7 +97,7 @@ export function SyncChip({payload, archiveMode}: {payload: MonthPayload | null; 
   const s = payload?.sync;
   const now = useNow();
   if (!s) return null;
-  const time = s.lastSyncAt ? String(s.lastSyncAt).slice(11, 16) : '--:--';
+  const time = s.lastSyncAt ? new Intl.DateTimeFormat('en-GB', {timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit'}).format(new Date(s.lastSyncAt)) : '--:--';
   if (archiveMode) {
     const date = s.lastSyncAt ? String(s.lastSyncAt).slice(5, 10) : '--';
     return (
@@ -87,6 +120,39 @@ export function SyncChip({payload, archiveMode}: {payload: MonthPayload | null; 
     </span>
   );
 }
+export function Guards({payload}: {payload: MonthPayload | null}) {
+  const guards = payload?.planner?.insights?.guards || [];
+  if (!guards.length) return null;
+  return <Card className="guards"><h2>제약 확인 <Chip>{guards.length}건</Chip></h2>
+    {guards.map((guard, i) => <div className="guard-row" key={`${guard.key}-${guard.date || guard.weekKey}-${i}`}>
+      <span className={`dot ${guard.level === 'breach' ? 'dot--danger' : 'dot--warn'}`} />
+      <span>{guard.label}</span><Chip>{guard.level === 'breach' ? '위반' : '주의'}</Chip>
+    </div>)}
+  </Card>;
+}
+
+export function CollectButton({payload}: {payload: MonthPayload | null}) {
+  const now = useNow(1000);
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [until, setUntil] = useState(0);
+  if (window.location.pathname.startsWith('/demo') || !payload?.sync ||
+    (!payload.sync.stale && (payload.sync.lastSyncAt ? elapsedSinceSync(payload, now) : (payload.sync.ageMinutes || 0)) <= 30)) return null;
+  const retry = Math.max(0, Math.ceil((until - now.getTime()) / 1000));
+  const collect = async () => {
+    setBusy(true);
+    try {
+      const response = await fetch('/api/sync', {method: 'POST', cache: 'no-store'});
+      const body: {state: string; retryAfterSeconds?: number} = await response.json();
+      if (body.state === 'cooldown') setUntil(Date.now() + (body.retryAfterSeconds || 0) * 1000);
+      setMessage(({started: '수집 시작됨', running: '수집 중', cooldown: '수집 대기', unavailable: '수집 불가'} as Record<string, string>)[body.state] || '수집 불가');
+    } catch { setMessage('수집 요청 실패'); }
+    finally { setBusy(false); }
+  };
+  return <span className="collect"><Button size="sm" variant="secondary" isDisabled={busy || retry > 0} onPress={collect}>지금 수집</Button>
+    <span role="status">{message}{retry > 0 ? ` · ${retry}초 후` : ''}</span></span>;
+}
+
 
 /** 모든 현재-month 탭에서 같은 상태를 편집하는 전역 전략 패널. */
 export function StrategySwitcher({payload, selected, setTarget, enabled, dailyAverageMinutes, setDailyAverageMinutes, settings, setSettings, loading, baseline}: {
