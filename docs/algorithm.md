@@ -48,19 +48,21 @@ value is not a capacity bound and is never used for the forecast range.
 
 Pace counts ledger `workday` dates: completed dates precede KST today; remaining
 dates include today. Expected progress is completed / total workdays. Burn rate
-is official `derived.recognizedMinutes` divided by completed workdays, rounded to
-whole minutes (Python nearest-even rounding); it is unknown before any completed
-workday. Percentages use one decimal place and may exceed 100%.
+is completed recognition divided by completed workdays, rounded to whole minutes
+(Python nearest-even rounding); it is unknown before any completed workday.
+Completed recognition sums all ledger dates before today, including weekend
+work. Each row uses `recognized_minutes`, falling back to work plus time off.
+Official percentages use that completed sum; achieved percentages add today's
+ledger recognition, whether ongoing or finished. Month-level derived totals and
+plan/truth in-progress values are not used, so today's work is never counted twice.
+Percentages use one decimal place and may exceed 100%.
 
-Targets are base (`derived.targetMinutes`), nine-hour (total workdays × 540),
-fixed OT (`derived.fixedOtMinutes`), and maximum (`derived.maxMinutes`), in that
-order; nonpositive targets are omitted. Official percentages use only official
-recognition. Achieved percentages add explicit `plan.inProgressRecognizedMinutes`
-when present (including explicit zero), otherwise the truth record's effective
-minus source recognition. Without explicit provenance, today's ongoing ledger
-recognition is in-progress; a finished today's row is added only when official
-recognition equals the sum of prior ledger recognition, avoiding double counting.
-The demo explicitly supplies zero in-progress recognition.
+Targets use `planner.targetOptions` keys `target`, `nine_hour`, `fixed_ot`, and
+`max`, in that order, with fixed labels 8시간(소정), 9시간, 고정OT, and 최대.
+Nine-hour falls back to total workdays × 540 when absent from options. Base,
+fixed OT, and maximum fall back to `derived.targetMinutes`, `fixedOtMinutes`,
+and `maxMinutes` only when the options list is absent, never when individual
+options are missing. Nonpositive targets are omitted.
 
 Required daily work rounds up the positive target-minus-official gap divided by
 remaining workdays (zero when none remain); feasibility compares it with the

@@ -264,29 +264,24 @@ def test_four_target_progress_synthetic_month():
     assert [target["projectedPercent"] for target in targets] == [121.6, 108.1, 98.7, 87.4]
 
 
-@pytest.mark.parametrize("explicit", ["plan", "truth", "finished_excluded", "finished_included"])
-def test_effective_progress_provenance_and_no_double_count(explicit):
+@pytest.mark.parametrize("ongoing", [True, False])
+def test_progress_ignores_whether_derived_total_includes_today(ongoing):
     source = progress_payload()
-    if explicit == "plan":
-        source["planner"]["plan"]["inProgressRecognizedMinutes"] = 100
-        effective = 6522
-    elif explicit == "truth":
-        source["truth"] = {"current": {"sourceRecognizedMinutes": 6422, "effectiveRecognizedMinutes": 6522}}
-        effective = 6522
-    else:
-        source["days"][16]["is_ongoing"] = False
-        effective = 6852
-        if explicit == "finished_included":
-            source["derived"]["recognizedMinutes"] = 6852
-    target = month_insights(source, now=PROGRESS_NOW)["targets"][0]
-    assert target["achievedPercent"] == round(effective / 10080 * 100, 1)
+    source["days"][16]["is_ongoing"] = ongoing
+    expected = month_insights(source, now=PROGRESS_NOW)
+    source["derived"]["recognizedMinutes"] += 430
+    actual = month_insights(source, now=PROGRESS_NOW)
+    for key in ("pace", "burnRateMinutes", "targets"):
+        assert actual[key] == expected[key]
 
 
-def test_demo_explicit_zero_in_progress_is_not_added_twice():
-    source = month_payload()
-    insights = source["planner"]["insights"]
-    for target in insights["targets"]:
-        assert target["achievedPercent"] == target["officialPercent"]
+def test_demo_separates_completed_and_today_and_uses_target_options():
+    insights = month_payload()["planner"]["insights"]
+    assert insights["burnRateMinutes"] == 540
+    assert [target["minutes"] for target in insights["targets"]] == [7200, 11340, 7800, 9000]
+    base = insights["targets"][0]
+    assert base["officialPercent"] == 7.5
+    assert base["achievedPercent"] == 10.8
 
 
 def test_first_workday_burn_rate_is_unknown_and_projection_stays_official():
@@ -309,6 +304,8 @@ def test_first_workday_burn_rate_is_unknown_and_projection_stays_official():
 def test_already_achieved_target_eta(now, eta):
     source = progress_payload()
     source["derived"]["targetMinutes"] = 6000
+    if now.day == 2:
+        source["days"][0]["recognized_minutes"] = 6000  # Completed weekend work counts.
     target = month_insights(source, now=now)["targets"][0]
     assert target["etaDate"] == eta
     assert target["requiredDailyMinutes"] == 0
@@ -345,3 +342,32 @@ def test_target_progress_default_cap_and_kst_boundary():
     assert month_insights(source, now=PROGRESS_NOW.astimezone(dt.UTC)) == expected
     source["days"].reverse()
     assert month_insights(source, now=PROGRESS_NOW) == expected
+
+
+def test_completed_recognition_fallback_includes_weekend_work_and_timeoff():
+    source = progress_payload()
+    source["days"][0].pop("recognized_minutes")
+    source["days"][0].update(work_minutes=60, timeoff_minutes=30)
+    insights = month_insights(source, now=PROGRESS_NOW)
+    assert insights["burnRateMinutes"] == round((6422 + 90) / 11)
+    assert insights["targets"][0]["officialPercent"] == round(6512 / 10080 * 100, 1)
+
+
+def test_option_targets_override_derived_and_keep_fixed_labels():
+    source = progress_payload()
+    source["planner"]["targetOptions"] = [
+        {"key": key, "label": "합성 옵션", "minutes": minutes}
+        for key, minutes in [("target", 9000), ("nine_hour", 11000),
+                             ("fixed_ot", 12000), ("max", 13000)]
+    ]
+    targets = month_insights(source, now=PROGRESS_NOW)["targets"]
+    assert [target["minutes"] for target in targets] == [9000, 11000, 12000, 13000]
+    assert [target["label"] for target in targets] == ["8시간(소정)", "9시간", "고정OT", "최대"]
+
+
+def test_present_options_do_not_fall_back_to_selected_derived_targets():
+    source = progress_payload()
+    source["planner"]["targetOptions"] = [{"key": "target", "minutes": 7200}]
+    targets = month_insights(source, now=PROGRESS_NOW)["targets"]
+    assert [target["key"] for target in targets] == ["base", "nine_hour"]
+    assert [target["minutes"] for target in targets] == [7200, 11340]

@@ -12,38 +12,30 @@ def _ceil_average(minutes: int, days: int) -> int:
 
 
 def _target_progress(payload: dict, today: str) -> dict:
-    """Use official totals for pace; distinguish explicit in-progress recognition."""
+    """Compute pace from completed ledger dates, independent of selected totals."""
     ledger = {day["date"]: day for day in payload["days"]}
     workdays = sorted(date for date, day in ledger.items() if day["day_type"] == "workday")
     completed = [date for date in workdays if date < today]
     remaining = [date for date in workdays if date >= today]
     derived = payload["derived"]
-    official = derived["recognizedMinutes"]
+
+    def recognized(day: dict) -> int:
+        return day.get("recognized_minutes", day.get("work_minutes", 0) + day.get("timeoff_minutes", 0))
+
+    official = sum(recognized(day) for date, day in ledger.items() if date < today)
+    effective = official + recognized(ledger.get(today, {}))
     planner = payload.get("planner") or {}
-    current = (payload.get("truth") or {}).get("current") or {}
-    in_progress = (planner.get("plan") or {}).get("inProgressRecognizedMinutes")
-    if in_progress is None and "effectiveRecognizedMinutes" in current and "sourceRecognizedMinutes" in current:
-        in_progress = max(0, current["effectiveRecognizedMinutes"] - current["sourceRecognizedMinutes"])
-    if in_progress is None:
-        day = ledger.get(today, {})
-        prior_recognized = sum(
-            row.get("recognized_minutes", 0) for date, row in ledger.items() if date < today
-        )
-        # Without explicit provenance, an ongoing row is in-progress. A finished
-        # row is added only when official equals the prior-day ledger total.
-        in_progress = day.get("recognized_minutes", 0) if (
-            day.get("is_ongoing", False) or official == prior_recognized
-        ) else 0
-    effective = official + in_progress
+    options = planner.get("targetOptions")
+    option_minutes = {option["key"]: option["minutes"] for option in options or []}
     burn_rate = round(official / len(completed)) if completed else None
     projected = official + (burn_rate or 0) * len(remaining)
     long_cap = planner.get("settings", {}).get("longDayMinutes", 719)
     targets = []
     for key, label, minutes in [
-        ("base", "8시간(소정)", derived.get("targetMinutes", 0)),
-        ("nine_hour", "9시간", len(workdays) * 540),
-        ("fixed_ot", "고정OT", derived.get("fixedOtMinutes", 0)),
-        ("max", "최대", derived.get("maxMinutes", 0)),
+        ("base", "8시간(소정)", option_minutes.get("target", 0) if options is not None else derived.get("targetMinutes", 0)),
+        ("nine_hour", "9시간", option_minutes.get("nine_hour", len(workdays) * 540)),
+        ("fixed_ot", "고정OT", option_minutes.get("fixed_ot", 0) if options is not None else derived.get("fixedOtMinutes", 0)),
+        ("max", "최대", option_minutes.get("max", 0) if options is not None else derived.get("maxMinutes", 0)),
     ]:
         if minutes <= 0:
             continue
