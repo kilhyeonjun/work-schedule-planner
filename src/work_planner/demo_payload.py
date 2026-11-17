@@ -7,6 +7,7 @@ from functools import lru_cache
 from itertools import combinations
 from typing import Any
 
+from .insights import month_insights
 from .planner import plan_month
 
 DEMO_YEAR = 2042
@@ -397,6 +398,9 @@ def month_payload(
             "todayAction": {"kind": "workday", "date": today_plan["date"], "window": today_window, "decisionTitle": "오늘은 계획대로 진행", "message": "합성 데이터 기반 권장", "workedMinutes": today_plan["currentWorkedMinutes"], "remainingTodayMinutes": today_plan["plannedAdditionalMinutes"], "recommendedLeaveTime": today_window[-5:], "minimumTargetRemainingTodayMinutes": today_plan["plannedAdditionalMinutes"]},
         },
     }
+    base["planner"]["insights"] = month_insights(
+        base, now=dt.datetime.combine(DEMO_TODAY, dt.time(12), dt.timezone(dt.timedelta(hours=9)))
+    )
     return base
 
 
