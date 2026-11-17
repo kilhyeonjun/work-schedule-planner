@@ -16,3 +16,4 @@ sbom.cdx.json
 .env
 .env.*
 !.env.example
+/target/

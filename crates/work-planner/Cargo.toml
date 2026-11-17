@@ -1,0 +1,12 @@
+[package]
+name = "work-planner"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+
+[[bin]]
+name = "work-planner-cli"
+path = "src/main.rs"
