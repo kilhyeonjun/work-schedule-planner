@@ -74,3 +74,9 @@ Unreached targets have no ETA and expose projected shortfall. These are
 arithmetic pace estimates, not constrained-plan guarantees. Pace and target
 calculations do not use selected-plan allocations; archive months still return
 no insights.
+
+The synthetic demo exposes all four presets in `targetOptions` and `comparisons`.
+Its 9시간 target counts synthetic month workdays × 540; the demo API permits that
+target above the older 9,000-minute selector bound. Each comparison uses the same
+planner as a selected target. An infeasible nine-hour target retains its requested
+minutes and reports the unmet gap without relaxing any constraints.

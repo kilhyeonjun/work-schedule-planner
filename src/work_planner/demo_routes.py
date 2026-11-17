@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import json
 
-from .demo_payload import DEFAULT_TARGET, DEMO_MONTH, DEMO_YEAR, archive_payload, month_payload
+from .demo_payload import (
+    DEFAULT_TARGET,
+    DEMO_MONTH,
+    DEMO_YEAR,
+    archive_payload,
+    month_payload,
+    nine_hour_target_minutes,
+)
 
 LANDING = """<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>근무 계획 데모</title><style>body{font:16px system-ui;max-width:680px;margin:15vh auto;padding:24px;background:#0b0c0e;color:#eef0f4}a{display:inline-block;margin:12px 8px 0 0;padding:12px 18px;border:1px solid #596070;border-radius:8px;color:#eef0f4;text-decoration:none}</style><main><h1>근무 계획 데모</h1><p>합성 데이터로 동작하는 읽기 전용 데모입니다.</p><a href="/demo/">데모 보기</a><a href="/app/">로그인</a></main></html>"""
 
@@ -35,7 +42,8 @@ def route(method: str, path: str, query_string: str) -> tuple[int, dict[str, str
         query = _query(query_string)
         year = _number(query, "year", DEMO_YEAR, DEMO_YEAR - 1, DEMO_YEAR)
         month = _number(query, "month", DEMO_MONTH, 1, 12)
-        target = _number(query, "target", DEFAULT_TARGET, 60, 9000)
+        year, month = min((year, month), (DEMO_YEAR, DEMO_MONTH))
+        target = _number(query, "target", DEFAULT_TARGET, 60, max(9000, nine_hour_target_minutes(year, month)))
         normal = _number(query, "normal", 500, 285, 719)
         long = _number(query, "long", 719, normal, 719)
         short = _number(query, "short", 285, 285, normal)

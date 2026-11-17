@@ -17,6 +17,13 @@ DEFAULT_TARGET = 7_800
 WEEKDAYS = "월화수목금토일"
 
 
+def nine_hour_target_minutes(year: int, month: int) -> int:
+    return 540 * sum(
+        dt.date(year, month, day).weekday() < 5
+        for day in range(1, calendar.monthrange(year, month)[1] + 1)
+    )
+
+
 def _clock(minutes: int) -> str:
     return f"{minutes // 60:02d}:{minutes % 60:02d}"
 
@@ -228,7 +235,7 @@ def _comparison(
         "status": plan["status"],
         "remainingMinutes": max(0, target - plan["recognizedBaselineMinutes"]),
         "gapMinutes": plan["gapMinutes"],
-        "effortLabel": {"target": "낮음", "fixed_ot": "보통", "max": "높음"}[key],
+        "effortLabel": {"target": "낮음", "nine_hour": "높음", "fixed_ot": "보통", "max": "높음"}[key],
         "effortMessage": "합성 데이터 기반 시뮬레이션",
         "projectedExtraPayAfterTaxKrw": 0,
         "summary": {
@@ -342,7 +349,12 @@ def month_payload(
     }
     if archive:
         return base
-    options = [("target", "최소 기준", 7200), ("fixed_ot", "수당 기준선", 7800), ("max", "상한", 9000)]
+    options = [
+        ("target", "최소 기준", 7200),
+        ("nine_hour", "9시간", nine_hour_target_minutes(year, month)),
+        ("fixed_ot", "수당 기준선", 7800),
+        ("max", "상한", 9000),
+    ]
     comparison_plans = []
     for key, label, value in options:
         comparison_plan = result if value == target else _demo_plan(year, month, value, normal, long, short, False)

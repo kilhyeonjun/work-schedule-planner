@@ -24,6 +24,7 @@ def test_current_demo_payload_supports_every_canonical_tab():
     assert payload["sync"] and payload["notifications"]["items"]
     assert {item["key"] for item in payload["planner"]["comparisons"]} == {
         "target",
+        "nine_hour",
         "fixed_ot",
         "max",
     }
@@ -140,7 +141,7 @@ def test_demo_reuses_deterministic_selected_and_comparison_plans(monkeypatch):
     month_payload(DEMO_YEAR, DEMO_MONTH, target=7800)
     month_payload(DEMO_YEAR, DEMO_MONTH, target=7800)
 
-    assert calls == 3
+    assert calls == 4
 
 
 def test_demo_target_below_core_floor_fails_closed_without_partial_work():
@@ -280,3 +281,36 @@ def test_reviewed_frontend_manifest_is_immutable():
     assert files == set(manifest["files"])
     for relative, expected_sha in manifest["files"].items():
         assert hashlib.sha256((source / relative).read_bytes()).hexdigest() == expected_sha, relative
+
+
+def test_demo_four_presets_include_a_computed_nine_hour_comparison():
+    planner = month_payload()["planner"]
+    options = planner["targetOptions"]
+    assert [option["key"] for option in options] == ["target", "nine_hour", "fixed_ot", "max"]
+    workdays = sum(day["day_type"] == "workday" for day in month_payload()["days"])
+    assert options[1] == {"key": "nine_hour", "label": "9시간", "minutes": workdays * 540}
+    assert [comparison["key"] for comparison in planner["comparisons"]] == [
+        "target", "nine_hour", "fixed_ot", "max",
+    ]
+    nine_hour = planner["comparisons"][1]
+    assert nine_hour["targetMinutes"] == workdays * 540
+    assert nine_hour["gapMinutes"] > 0
+    assert nine_hour["status"] == "insufficient_slots"
+
+
+def test_demo_route_selects_nine_hour_without_clamping_to_old_maximum():
+    target = month_payload()["planner"]["targetOptions"][1]["minutes"]
+    status, _, body = route("GET", "/demo/api/month", f"target={target}")
+    payload = json.loads(body)
+    assert status == 200
+    planner = payload["planner"]
+    plan = planner["plan"]
+    assert planner["selectedTargetMinutes"] == target == 11340
+    assert payload["derived"]["targetMinutes"] == plan["targetMinutes"] == target
+    assert plan["recognizedMinutes"] + plan["plannedTotalMinutes"] + plan["gapMinutes"] == target
+    assert sum(day["plannedAdditionalMinutes"] for day in plan["days"]) == plan["plannedTotalMinutes"]
+    assert plan["gapMinutes"] > 0
+    assert [comparison["key"] for comparison in planner["comparisons"] if comparison["selected"]] == ["nine_hour"]
+    assert planner["comparisons"][1]["gapMinutes"] == plan["gapMinutes"]
+    assert json.loads(route("GET", "/demo/api/month", "target=999999")[2])["planner"]["selectedTargetMinutes"] == target
+    assert json.loads(route("GET", "/demo/api/month", "year=2042&month=12&target=11340")[2])["planner"]["selectedTargetMinutes"] == target
