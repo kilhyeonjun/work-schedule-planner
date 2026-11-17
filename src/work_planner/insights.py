@@ -25,6 +25,23 @@ def _recognized_minutes(day: dict) -> int:
     return day.get("recognized_minutes", day.get("work_minutes", 0) + day.get("timeoff_minutes", 0))
 
 
+def _break_minutes(day: dict) -> int:
+    """Non-work time between first start and last end: recorded rest plus gaps and leave.
+
+    A half-day leave or a long gap between two work blocks is a break even when no rest
+    block was recorded, so recorded rest alone flags false breaches.
+    """
+    rest = day.get("rest_minutes", 0)
+    start, end = day.get("first_start"), day.get("last_end")
+    if not start or not end:
+        return rest
+    start_minutes = int(start[:2]) * 60 + int(start[3:5])
+    end_minutes = int(end[:2]) * 60 + int(end[3:5])
+    span = end_minutes - start_minutes + (1440 if end_minutes < start_minutes else 0)
+    return max(rest, span - day["work_minutes"])
+
+
+
 def _target_progress(payload: dict, today: str) -> dict:
     """Compute pace from completed ledger dates, independent of selected totals."""
     ledger = {day["date"]: day for day in payload["days"]}
@@ -153,12 +170,13 @@ def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
             continue
         worked = day["work_minutes"]
         required = 60 if worked >= 480 else 30 if worked >= 240 else 0
-        if day["rest_minutes"] < required:
+        rest = _break_minutes(day)
+        if rest < required:
             guards.append({
                 "key": "rest_break", "level": "risk" if date == today else "breach",
                 "date": date,
-                "label": f"{_month_day(date)} 휴게 {_duration(day['rest_minutes'])} · 필요 {_duration(required)}",
-                "minutes": day["rest_minutes"], "limitMinutes": required,
+                "label": f"{_month_day(date)} 휴게 {_duration(rest)} · 필요 {_duration(required)}",
+                "minutes": rest, "limitMinutes": required,
             })
     guards.sort(key=lambda guard: (
         guard["level"] != "breach",

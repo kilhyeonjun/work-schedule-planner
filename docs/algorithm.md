@@ -31,9 +31,11 @@ Guards sum each current-month ledger day's actual work and each plan day's
 additional work by ISO week, including completed weeks without plan rows. Weekly
 limits come from matching summary rows or default to 3,120 minutes. Projections
 within 240 minutes of the maximum are risks; above it they are breaches. Other
-guards report future Friday windows after 16:00 and insufficient recorded rest
-(30 minutes at 240 worked, 60 at 480). Ongoing today rest is a risk; past-day rest
-is a breach.
+guards report future Friday windows after 16:00 and insufficient rest
+(30 minutes at 240 worked, 60 at 480). Rest is all non-work time between the
+first start and last end (recorded rest, gaps between work blocks, and leave in
+between; overnight spans wrap), never less than recorded rest. Ongoing today rest
+is a risk; past-day rest is a breach.
 
 Leaving now projects today's remaining work evenly onto future workdays, assigning
 indivisible minutes in ISO-date order. A day exceeding the configured long-day

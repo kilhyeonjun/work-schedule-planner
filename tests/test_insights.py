@@ -100,6 +100,22 @@ def test_rest_thresholds_past_and_ongoing_today(worked, rest, required, index, l
     }])
 
 
+@pytest.mark.parametrize("first,last,worked,rest,flagged", [
+    # 10:07–12:00 work, 12:00–16:00 leave, 16:05–19:00 work: the leave is the break.
+    ("10:07", "19:00", 288, 0, False),
+    # Continuous 09:00–14:00 with no recorded rest is still a breach.
+    ("09:00", "14:00", 300, 0, True),
+    # Overnight spans wrap past midnight instead of going negative.
+    ("22:00", "02:00", 240, 0, True),
+    ("22:00", "02:30", 240, 30, False),
+])
+def test_rest_counts_non_work_gaps_between_first_start_and_last_end(first, last, worked, rest, flagged):
+    source = payload()
+    source["days"][0].update(first_start=first, last_end=last, work_minutes=worked, rest_minutes=rest)
+    guards = [guard for guard in month_insights(source, now=NOW)["guards"] if guard["key"] == "rest_break"]
+    assert bool(guards) is flagged
+
+
 def test_rest_ignores_future_and_nonongoing_today():
     source = payload()
     for day in source["days"][1:]:
