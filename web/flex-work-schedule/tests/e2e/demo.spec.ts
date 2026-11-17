@@ -481,7 +481,7 @@ test('collection request discloses started, running, cooldown and unavailable', 
 for (const scenario of [
   {status: 'planned', gap: 0, over: 0, unknown: 0, label: '가능'},
   {status: 'satisfied', gap: 0, over: 0, unknown: 0, label: '충족'},
-  {status: 'insufficient_slots', gap: 120, over: 0, unknown: 0, label: '부족(상한)'},
+  {status: 'insufficient_slots', gap: 120, over: 0, unknown: 0, label: '목표 도달 불가'},
   {status: 'insufficient_slots', gap: 120, over: 0, unknown: 120, label: '자료 확인 필요'},
   {status: 'infeasible_locked_target', gap: 0, over: 60, unknown: 0, label: '고정 충돌'},
   {status: 'infeasible_mandatory_attendance', gap: 0, over: 60, unknown: 0, label: '필수선 초과'},
@@ -520,13 +520,12 @@ for (const scenario of [
     await expect(page.locator('.plan-schedule')).toContainText(`현재 인정 ${hm(ledger)} · 목표 산입 ${hm(eligible)}`);
     await expect(state).not.toContainText('부족 0:00');
     await expect(state).not.toContainText('초과 0:00');
-    const action = state.getByRole('button', {name: '목표를 18:00로 변경'});
-    if (scenario.label === '부족(상한)') {
-      await expect(state).toContainText('현재 조건으로 18:00까지 계획 가능 · 목표 20:00보다 2:00 부족');
+    const action = state.getByRole('button', {name: '목표를 18:00로 맞추기'});
+    if (scenario.label === '목표 도달 불가') {
+      await expect(state).toContainText('남은 근무일을 모두 최대로 잡아도 18:00까지 · 목표 20:00보다 2:00 모자람');
       await expect(action).toBeVisible();
       await expect(page.locator('.switcher__trigger')).toContainText('20:00');
       await expect(page.locator('.plan-summary')).toContainText('계획 8:00 · 목표 산입 예상 18:00');
-      await page.screenshot({path: 'test-results/plan-capacity-state.png', fullPage: true});
     } else {
       await expect(state.getByRole('button')).toHaveCount(0);
     }
@@ -668,7 +667,99 @@ test('current remote deferral already credited by forecast does not explain capa
     await route.fulfill({response, body: JSON.stringify(body)});
   });
   await page.goto('/demo/?tab=plan');
-  await expect(page.locator('.plan-feas')).toContainText('부족(상한)');
+  await expect(page.locator('.plan-feas')).toContainText('목표 도달 불가');
   await expect(page.locator('.plan-feas')).toContainText('현재 인정 10:00 중 목표 산입 7:00 · 재택 3:00 보류');
-  await expect(page.getByRole('button', {name: '목표를 18:00로 변경'})).toBeVisible();
+  await expect(page.getByRole('button', {name: '목표를 18:00로 맞추기'})).toBeVisible();
+});
+
+for (const width of [1440, 390]) {
+  test(`capacity reasons explain the selected fixed-OT target ${width}`, async ({page}) => {
+    await page.setViewportSize({width, height: 1000});
+    await page.addInitScript(() => { (window as typeof window & {__DEMO_TODAY__?: string}).__DEMO_TODAY__ = '2026-11-17'; });
+    await page.route('**/demo/api/month?**', async route => {
+      const response = await route.fetch({url: new URL('/demo/api/month?year=2042&month=3', route.request().url()).href});
+      const body = await response.json();
+      const target = Number(new URL(route.request().url()).searchParams.get('target')) || 12420;
+      const dates = [17, 18, 19, 20, 23, 24, 25, 26, 27, 30];
+      const minutes = [581, 719, 719, 500, 719, 719, 682, 500, 500, 719];
+      const days = dates.map((date, index) => ({
+        date: `2026-11-${date}`, weekday: ['화', '수', '목', '금', '월', '화', '수', '목', '금', '월'][index],
+        kind: minutes[index] === 719 ? 'long' : 'normal', plannedMinutes: minutes[index],
+        plannedAdditionalMinutes: index === 0 ? 30 : minutes[index], currentWorkedMinutes: index === 0 ? 551 : 0,
+        isToday: index === 0, timeoffMinutes: 0,
+        window: index === 0 ? '05:19–16:00' : minutes[index] === 719 ? '06:40–19:40' : minutes[index] === 682 ? '06:40–19:02' : '06:40–16:00',
+      }));
+      const capacity = {maxForecastMinutes: 12233, shortfallMinutes: Math.max(0, target - 12233), limits: [
+        {kind: 'weekly_max', dates: dates.slice(4, 9).map(day => `2026-11-${day}`), label: '11/23–11/29 주 52시간 도달'},
+        {kind: 'friday_cap', dates: ['2026-11-20', '2026-11-27'], label: '금요일 11/20·11/27은 16시 퇴근 기준 8:20까지'},
+        {kind: 'daily_max', dates: [18, 19, 23, 24, 30].map(day => `2026-11-${day}`), label: '11/18·11/19·11/23·11/24·11/30 하루 최대 11:59'},
+      ]};
+      Object.assign(body, {year: 2026, month: 11, dataOrigin: 'synthetic', collectedAt: '2026-11-17T12:00:00+09:00'});
+      body.derived = {...body.derived, targetMinutes: 10080, fixedOtMinutes: 12420, statutoryMaxMinutes: 13812, timeOffMinutes: 0};
+      body.truth = {current: {...body.truth?.current, effectiveRecognizedMinutes: 6426, selectedTargetMinutes: target}};
+      body.days = [
+        ...Array.from({length: 10}, (_, index) => {
+          const number = index < 5 ? index + 2 : index + 4;
+          const worked = index < 5 ? 588 : 587;
+          return {date: `2026-11-${String(number).padStart(2, '0')}`, day_type: 'workday', work_minutes: worked, recognized_minutes: worked};
+        }),
+        ...days.map(day => ({date: day.date, weekday: day.weekday, day_type: 'workday', work_minutes: day.currentWorkedMinutes, recognized_minutes: day.currentWorkedMinutes})),
+      ];
+      body.planner.selectedTargetMinutes = target;
+      body.planner.strategy = {title: '상한까지 계획', message: '금요일·주간·날짜별 한도를 반영한 합성 근무표입니다.'};
+      body.planner.targetOptions = [{key: 'target', label: '최소 기준', minutes: 10080}, {key: 'fixed_ot', label: '고정OT', minutes: 12420}];
+      body.planner.comparisons = [{key: 'fixed_ot', label: '고정OT', targetMinutes: 12420, gapMinutes: 187, capacity: {...capacity, shortfallMinutes: 187}, summary: {longDays: 5}, effortLabel: '높음'}];
+      body.planner.plan = {
+        status: target > 12233 ? 'insufficient_slots' : 'planned', targetMinutes: target,
+        recognizedMinutes: 5875, plannedTotalMinutes: 6358, remainingMinutes: target - 6426,
+        forecastMinutes: 12233, gapMinutes: capacity.shortfallMinutes, days,
+        ...(capacity.shortfallMinutes > 0 ? {capacity} : {}),
+        accounting: {targetEligibleMinutes: 5875, currentTargetEligibleMinutes: 6426},
+        summary: {weekly: [
+          {key: '2026-W47', label: '11/16–11/22', dates: days.slice(0, 4).map(day => day.date), actualMinutes: 551, plannedAdditionalMinutes: 1968, projectedActualMinutes: 2519, weeklyMaxMinutes: 3120},
+          {key: '2026-W48', label: '11/23–11/29', dates: days.slice(4, 9).map(day => day.date), plannedAdditionalMinutes: 3120, projectedActualMinutes: 3120, weeklyMaxMinutes: 3120},
+          {key: '2026-W49', label: '11/30–12/6', dates: ['2026-11-30'], plannedAdditionalMinutes: 719, projectedActualMinutes: 719, weeklyMaxMinutes: 3120},
+        ]},
+      };
+      await route.fulfill({response, body: JSON.stringify(body)});
+    });
+    await page.goto('/demo/?year=2026&month=11&tab=plan&target=12420');
+    const state = page.locator('.plan-feas');
+    await expect(state).toContainText('목표 도달 불가');
+    await expect(state).toContainText('남은 근무일을 모두 최대로 잡아도 203:53까지 · 목표 207:00보다 3:07 모자람');
+    await expect(state).toContainText('11/23–11/29 주 52시간 도달');
+    await expect(state).toContainText('금요일 11/20·11/27은 16시 퇴근 기준 8:20까지');
+    await expect(state).toContainText('하루 최대 11:59');
+    await expect(state).not.toContainText('제한 확인');
+    await expect(page.locator('.plan-strat')).toContainText('최대 203:53까지 가능');
+    await expect(page.locator('.switcher__trigger')).toContainText('207:00');
+    await page.screenshot({path: `test-results/plan-capacity-${width}.png`, fullPage: true});
+    const nav = page.locator(width < 1024 ? '.tabbar' : '.sidebar__nav');
+    for (const name of ['달력', '분석']) {
+      await nav.getByRole('button', {name, exact: true}).click();
+      await expect(page.locator('.plan-feas')).toContainText('11/23–11/29 주 52시간 도달');
+      await expect(page.getByRole('button', {name: '목표를 203:53로 맞추기'})).toBeVisible();
+    }
+    await nav.getByRole('button', {name: '계획', exact: true}).click();
+    await page.getByRole('button', {name: '목표를 203:53로 맞추기'}).click();
+    await expect.poll(() => new URL(page.url()).searchParams.get('target')).toBe('12233');
+    await expect(page.locator('.plan-summary')).toContainText('가능');
+    await expect(page.locator('.plan-feas').getByRole('button')).toHaveCount(0);
+  });
+}
+
+test('mobile explains leave-now shortfall without allocation jargon', async ({page}) => {
+  await page.setViewportSize({width: 390, height: 844});
+  await page.route('**/demo/api/month?**', async route => {
+    const response = await route.fetch();
+    const body = await response.json();
+    Object.assign(body.planner.insights.leaveNow, {feasible: false, shortfallMinutes: 187});
+    body.planner.insights.targets[0].requiredFeasible = false;
+    await route.fulfill({response, body: JSON.stringify(body)});
+  });
+  await page.goto('/demo/?tab=today');
+  await expect(page.locator('.leave-now')).toContainText('지금 퇴근하면 남은 날로 3:07 못 채움');
+  await expect(page.getByLabel('필요한 일 평균이 하루 상한을 넘음').first()).toBeVisible();
+  await expect(page.locator('.content')).not.toContainText('배치 부족');
+  await expect(page.getByLabel('배치 부족')).toHaveCount(0);
 });

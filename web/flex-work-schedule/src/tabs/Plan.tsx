@@ -42,13 +42,14 @@ export function PlanTab({payload, loading, selected, setTarget, settings}: TabPr
       <div id="plan-alternatives" className={`plan-stack ${alternativesOpen ? 'is-open' : ''}`}>{planner.comparisons?.map(comparison => <button key={comparison.key} className={`plan-strat ${comparison.targetMinutes === selected ? 'is-selected' : ''}`} aria-pressed={comparison.targetMinutes === selected} onClick={() => setTarget(comparison.targetMinutes)}>
         <span>{comparison.label}{comparison.targetMinutes === selected ? ' · 선택됨' : ''}</span><b>{fmt(comparison.targetMinutes)}</b>
         <span className="muted">세후 +{krw(comparison.projectedExtraPayAfterTaxKrw)}원 · 긴 날 {comparison.summary?.longDays || 0}회 · {comparison.effortLabel}</span>
+        {(comparison.gapMinutes || comparison.capacity?.shortfallMinutes || 0) > 0 && <span>최대 {fmt(comparison.capacity?.maxForecastMinutes ?? comparison.feasibility?.possibleTargetMinutes ?? (comparison.targetMinutes - (comparison.gapMinutes || 0)))}까지 가능</span>}
       </button>)}</div>
       <div className="plan-summary"><span className="chip">{state.label}</span><span>남은 실제 근무 <b>{fmt(plan.remainingMinutes)}</b> · 계획 <b>{fmt(plan.plannedTotalMinutes)}</b> · 목표 산입 예상 <b>{fmt(plan.forecastMinutes ?? ((plan.recognizedMinutes || 0) + (plan.plannedTotalMinutes || 0)))}</b></span></div>
       {(plan.inProgressRecognizedMinutes || 0) > 0 && <p className="muted">Flex 월 집계 {fmt(plan.sourceRecognizedMinutes)} · 집계 반영 대기 +{fmt(plan.inProgressRecognizedMinutes)}</p>}
     </Card>
     <div className={`plan-feas ${state.warning ? 'plan-feas--warn' : ''}`} role={state.warning ? 'alert' : 'status'}>
       <b>{state.label}</b><span>{state.message}</span>{state.hint && <span>{state.hint}</span>}
-      {state.actionTarget != null && <Button variant="secondary" size="sm" onPress={() => setTarget(state.actionTarget!)}>목표를 {fmt(state.actionTarget)}로 변경</Button>}
+      {state.actionTarget != null && <Button variant="secondary" size="sm" onPress={() => setTarget(state.actionTarget!)}>목표를 {fmt(state.actionTarget)}로 맞추기</Button>}
     </div>
     {editing && <OverridePreview key={`${editing.date}-${selected}-${settings.normalDayMinutes}-${settings.longDayMinutes}-${settings.shortDayMinutes}`} day={editing} target={selected} settings={settings} onClose={() => setEditing(undefined)} onSave={setSaved} />}
     <div className="plan-layout"><Card className="plan-schedule">

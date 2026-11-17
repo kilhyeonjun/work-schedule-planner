@@ -394,7 +394,7 @@ export function CalendarTab(props: TabProps) {
           </div>
           {state && <div className={`plan-feas ${state.warning ? 'plan-feas--warn' : ''}`} role={state.warning ? 'alert' : 'status'}>
             <span className="plan-feas__st">{state.label}</span><span>{state.message}</span>{state.hint && <span>{state.hint}</span>}
-            {state.actionTarget != null && <button onClick={() => props.setTarget(state.actionTarget!)}>목표를 {fmt(state.actionTarget)}로 변경</button>}
+            {state.actionTarget != null && <button onClick={() => props.setTarget(state.actionTarget!)}>목표를 {fmt(state.actionTarget)}로 맞추기</button>}
           </div>}
           <div className="cal-card__b">
             <div className="cal-grid">

@@ -21,7 +21,7 @@ export function TargetProgress({insights, detailed = false}: {insights?: Planner
       {detailed && <div role="cell" className="target-progress__official"><span className="muted">공식 / 현재 </span>{percent(target.officialPercent)} / {percent(target.achievedPercent)}</div>}
       <div role={detailed ? 'cell' : undefined} className="target-progress__outcome">{detailed && <span>예상 {fmt(target.projectedMinutes)} ({percent(target.projectedPercent)})<br /></span>}
         {target.shortfallMinutes > 0 ? `월말 부족 ${fmt(target.shortfallMinutes)}` : target.etaDate ? `ETA ${dateLabel(target.etaDate)}` : '도달일 미정'}</div>
-      <div role={detailed ? 'cell' : undefined} className="target-progress__required">{!target.requiredFeasible && <span className="dot dot--warn" aria-label="배치 부족" />}필요 {fmt(target.requiredDailyMinutes)}/일</div>
+      <div role={detailed ? 'cell' : undefined} className="target-progress__required">{!target.requiredFeasible && <span className="dot dot--warn" aria-label="필요한 일 평균이 하루 상한을 넘음" />}필요 {fmt(target.requiredDailyMinutes)}/일</div>
     </div>)}
     </div>
     <p className="target-progress__legend muted">진행 막대: 현재 인정 · 세로선: 경과 근무일 페이스{detailed ? ' · 공식은 수집값, 현재는 진행 중 추정 포함' : ''}</p>
