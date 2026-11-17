@@ -40,15 +40,16 @@ indivisible minutes in ISO-date order. A day exceeding the configured long-day
 cap contributes its overflow to the shortfall; no remaining workdays means all
 of today's remainder is a shortfall. Displayed averages round up to whole minutes.
 This is arithmetic, not a new constrained plan or a guarantee about weekly caps.
-Forecast uses completed ledger recognition (dates strictly before today) as its
-baseline, excluding today's recorded work. Expected minutes use canonical
+Forecast `recognizedMinutes` is completed ledger recognition (dates strictly before
+today) plus today's recorded recognition. Expected minutes use canonical
 `plan.forecastMinutes` when provided; otherwise they add `plannedTotalMinutes` to
-that baseline. The demo publishes its canonical forecast explicitly because its
-planner total represents additional work, while live anchored plans include
-today's full recommended work. Minimum and maximum add full short-day/long-day
-capacity for every remaining workday, including today, without subtracting
-today's recorded work. Selected-target feasibility is never a forecast capacity
-bound.
+the completed baseline, because live anchored plans include today's full
+recommended work. The demo publishes its canonical forecast explicitly because its
+planner total represents additional work. Minimum and maximum keep all recorded
+time (including holiday work and time beyond a day cap) and add short-day/long-day
+capacity for every future workday, plus today's unrecorded capacity
+(`max(0, cap − today's recorded)`) when today is a workday. Selected-target
+feasibility is never a forecast capacity bound.
 
 ### Target pace and burn rate
 
