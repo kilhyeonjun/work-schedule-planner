@@ -35,7 +35,7 @@ function NavIcon({tab}: {tab: string}) {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">{ICONS[tab]}</svg>;
 }
 export function ThemeControl() {
-  const [theme, setTheme] = useState(() => { try { return localStorage.getItem('flex-planner.theme') || 'auto'; } catch { return 'auto'; } });
+  const [theme, setTheme] = useState(() => { try { return localStorage.getItem('work-planner.theme') || 'auto'; } catch { return 'auto'; } });
   useEffect(() => {
     const media = matchMedia('(prefers-color-scheme: dark)');
     const apply = () => {
@@ -44,7 +44,7 @@ export function ThemeControl() {
       document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     };
     apply();
-    try { localStorage.setItem('flex-planner.theme', theme); } catch { /* Storage can be disabled. */ }
+    try { localStorage.setItem('work-planner.theme', theme); } catch { /* Storage can be disabled. */ }
     media.addEventListener('change', apply);
     return () => media.removeEventListener('change', apply);
   }, [theme]);

@@ -8,7 +8,7 @@ HeroUI v3 (`@heroui/react` / `@heroui/styles` 3.2.7), the dashboard's React Aria
 
 Native button resets stay in `@layer base` so they cannot erase HeroUI component padding/backgrounds. The `planner-segments` group gives targets and desktop themes separately padded pill segments, 3px gaps and accent-soft selection.
 
-The default theme follows the OS. Desktop theme choices (자동/밝게/어둡게) persist under `flex-planner.theme` and react to OS changes in automatic mode. Light and dark both use the HeroUI theme. Text stays in foreground/muted/accent colors; warning/danger status uses dots, chip edges or borders rather than low-contrast colored text. Cards have 20px corners, secondary surfaces 16px, and primary controls pill/12px shapes.
+The default theme follows the OS. Desktop theme choices (자동/밝게/어둡게) persist under `work-planner.theme` and react to OS changes in automatic mode. Light and dark both use the HeroUI theme. Text stays in foreground/muted/accent colors; warning/danger status uses dots, chip edges or borders rather than low-contrast colored text. Cards have 20px corners, secondary surfaces 16px, and primary controls pill/12px shapes.
 
 ## Navigation and hierarchy
 
