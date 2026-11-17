@@ -25,7 +25,7 @@ export type TargetOption = {key: string; label: string; minutes: number};
 
 export type Feasibility = {
   status?: string; possibleTargetMinutes?: number; gapMinutes?: number;
-  targetReductionMinutes?: number; requiredLongDayMinutes?: number; requiredLongDayFeasible?: boolean;
+  targetReductionMinutes?: number; requiredLongDayMinutes?: number | null; requiredLongDayFeasible?: boolean; longDayRationale?: string;
 };
 
 export type TodayAction = {
@@ -44,6 +44,8 @@ export type Plan = {
   sourceRecognizedMinutes?: number; inProgressRecognizedMinutes?: number;
   remainingMinutes?: number; plannedTotalMinutes?: number; forecastMinutes?: number; gapMinutes?: number; overTargetMinutes?: number; conflictReason?: string;
   capacity?: Capacity;
+  officeMinimum?: {requiredMinutes: number; currentMinutes: number; remainingMinutes: number; satisfied: boolean; projectedMinutes: number; projectedSatisfied: boolean; deferredRemoteMinutes: number; remoteCountsAfterMinimum: true} | null;
+  projectedPayBasis?: 'recommendation';
   accounting?: {targetEligibleMinutes?: number; currentTargetEligibleMinutes?: number; excludedUnknownMinutes?: number; deferredRemoteMinutes?: number; currentExcludedUnknownMinutes?: number; currentDeferredRemoteMinutes?: number};
   projectedOverFixedMinutes?: number; projectedExtraPayPreTaxKrw?: number; projectedExtraPayAfterTaxKrw?: number;
   summary?: {plannedDays?: number; longDays?: number; normalDays?: number; shortDays?: number; adjustDays?: number;
@@ -78,7 +80,7 @@ export type PlannerInsights = {
   guards: {key: string; level: 'risk' | 'breach'; weekKey?: string; date?: string; label: string; minutes: number; limitMinutes: number}[];
   leaveNow: null | {date: string; workedMinutes: number; todayRemainingMinutes: number; remainingWorkdays: number;
     averageDailyBeforeMinutes: number; averageDailyAfterMinutes: number; additionalPerDayMinutes: number; feasible: boolean; shortfallMinutes: number};
-  forecast: {recognizedMinutes: number; expectedMinutes: number; minMinutes: number; maxMinutes: number};
+  forecast: {recognizedMinutes: number; expectedMinutes: number; minMinutes: number | null; maxMinutes: number | null; fixedConflict?: boolean; basis?: 'target_eligible' | 'ledger'};
   targets?: {key: 'base' | 'nine_hour' | 'fixed_ot' | 'max'; label: string; minutes: number; achievedPercent: number; officialPercent: number;
     requiredDailyMinutes: number; requiredFeasible: boolean; etaDate: string | null; projectedMinutes: number; projectedPercent: number; shortfallMinutes: number}[];
   pace?: {totalWorkdays: number; completedWorkdays: number; remainingWorkdays: number; expectedPercent: number};

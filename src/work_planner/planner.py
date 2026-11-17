@@ -208,6 +208,7 @@ def _allocate(payload: dict[str, Any]) -> tuple[Any, dict[str, int]]:
     baseline = sum(day.recognized_minutes for day in month.days)
     requested = max(0, month.target_minutes - baseline)
     weekly_work = weekly_work_baseline(month.days)
+    actual_weekly_work = dict(weekly_work)
     daily_caps = {day.date: daily_additional_cap(day, month.policy) for day in month.days}
 
     # A date override is a fixed local plan, not a cap. Lock it before the
@@ -223,6 +224,13 @@ def _allocate(payload: dict[str, Any]) -> tuple[Any, dict[str, int]]:
         fixed_total += fixed
         weekly_work[day.week_key] = weekly_work.get(day.week_key, 0) + fixed
         daily_caps[day.date] = 0
+    for week, projected_work in weekly_work.items():
+        limit = max(month.policy.weekly_limit_minutes, actual_weekly_work.get(week, 0))
+        if projected_work > limit:
+            raise InfeasiblePlanError({
+                "reason": "fixed_weekly_conflict", "week": week,
+                "projectedWorkMinutes": projected_work, "weeklyLimitMinutes": limit,
+            })
 
     # Fixed local commitments are authoritative even when they exceed the
     # selected target; the caller must surface the resulting conflict.

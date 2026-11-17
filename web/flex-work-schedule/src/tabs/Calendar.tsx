@@ -1,7 +1,7 @@
 import './calendar.css';
 import React, {useEffect, useState} from 'react';
 import {currentRecognized, planState, DayRow, MonthPayload, PlannerDay, TabProps, dayTypeLabel, fmt, kindLabel, nowDate, pad, todayIso} from '../lib';
-import {Card, Chip, Skel} from '../ui';
+import {Card, Chip, OfficeMinimum, Skel} from '../ui';
 
 const MAX_DAY = 719; // 11:59 — 히트맵/채움 스케일 (comp 기준)
 const DOW = ['월', '화', '수', '목', '금', '토', '일'];
@@ -379,6 +379,7 @@ export function CalendarTab(props: TabProps) {
   return (
     <div className="cal-tab">
       <div className="cal-main">
+        <OfficeMinimum payload={displayedPayload} />
         <Card className={loading ? 'is-refreshing' : ''}>
           <div className="cal-card__h">
             <span className="cal-card__t">{year}년 {month}월</span>

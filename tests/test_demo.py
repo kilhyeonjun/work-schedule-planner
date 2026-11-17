@@ -213,7 +213,7 @@ def test_all_ledger_rows_match_work_rest_and_bounds():
         intervals = [interval_.split("–") for interval_ in day["intervals"]]
         worked = sum(minutes(end) - minutes(start) for start, end in intervals)
         span = minutes(day["last_end"]) - minutes(day["first_start"])
-        assert worked == day["work_minutes"] == day["office_minutes"], day["date"]
+        assert worked == day["work_minutes"] == day["office_minutes"] + day["remote_minutes"], day["date"]
         assert intervals[0][0] == day["first_start"]
         assert intervals[-1][1] == day["last_end"]
         assert span == worked + day["rest_minutes"], day["date"]

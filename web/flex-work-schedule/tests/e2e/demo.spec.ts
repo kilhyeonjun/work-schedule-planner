@@ -356,7 +356,7 @@ for (const viewport of [{width: 1440, height: 1000}, {width: 390, height: 844}])
     }
     await nav.getByRole('button', {name: '분석', exact: true}).click();
     await expect(page.locator('.target-progress--detailed .target-progress__row')).toHaveCount(4);
-    await expect(page.locator('.target-progress--detailed')).toContainText('공식');
+    await expect(page.locator('.target-progress--detailed')).toContainText('전일까지');
     await expect(page.locator('.forecast-card')).toBeVisible();
     await expect(page.locator('.an-chart')).toBeVisible();
     await expect(page.locator('.an-cmp-row')).toHaveCount(4);
@@ -763,9 +763,9 @@ test('mobile explains leave-now shortfall without allocation jargon', async ({pa
     await route.fulfill({response, body: JSON.stringify(body)});
   });
   await page.goto('/demo/?tab=today');
-  await expect(page.locator('.leave-now')).toContainText('균등하게 나누면 하루 +');
-  await expect(page.locator('.leave-now')).toContainText('상한 초과 3:07');
-  await expect(page.locator('.leave-now')).toContainText('실제 배정은 미검증');
+  await expect(page.locator('.leave-now')).toContainText('참고 평균: 하루 +');
+  await expect(page.locator('.leave-now')).toContainText('제약 반영 후 부족 3:07');
+  await expect(page.locator('.leave-now')).toContainText('주 52시간·금요일·날짜 고정·휴가를 반영한 계산');
   await expect(page.getByLabel('필요한 일 평균이 하루 상한을 넘음').first()).toBeVisible();
   await expect(page.locator('.content')).not.toContainText('배치 부족');
   await expect(page.getByLabel('배치 부족')).toHaveCount(0);
@@ -830,4 +830,55 @@ test('classification exclusions cannot hide an exhausted-day capacity shortfall'
     await expect(state).not.toContainText('자료 확인 필요');
     await expect(state.getByRole('button')).toHaveCount(0);
   }
+});
+
+for (const width of [1440, 390]) {
+  test(`office minimum is visible across tabs at ${width}`, async ({page}) => {
+    await page.setViewportSize({width, height: width === 390 ? 844 : 1000});
+    await page.goto('/demo/?year=2042&month=3&tab=today');
+    await expect(page.getByRole('heading', {name: '사무실 최소 기준', exact: true})).toBeVisible();
+    await expect(page.locator('.office-minimum')).toContainText('사무실·휴가');
+    await expect(page.locator('.target-segments')).toBeVisible();
+    await expect(page.locator('.office-minimum')).toContainText('최소 120:00');
+    await expect(page.locator('.office-minimum')).toContainText('재택 2:00은 최소 기준을 채운 뒤 목표에 들어감');
+    await expect(page.locator('.office-minimum')).toContainText(/추천표대로면 .*에 충족/);
+    await page.screenshot({path: `test-results/office-minimum-${width}.png`, fullPage: true});
+    for (const tab of ['계획', '달력']) {
+      await page.locator(width === 390 ? '.tabbar button' : '.sidebar__item', {hasText: tab}).click();
+      await expect(page.locator('.office-minimum')).toBeVisible();
+    }
+  });
+}
+
+test('office minimum collapses when met and omits missing breakdown', async ({page}) => {
+  let missing = false;
+  await page.route('**/demo/api/month?**', async route => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.planner.plan.officeMinimum = missing ? null : {
+      requiredMinutes: 7200, currentMinutes: 7300, remainingMinutes: 0, satisfied: true,
+      projectedMinutes: 7800, projectedSatisfied: true, deferredRemoteMinutes: 0, remoteCountsAfterMinimum: true,
+    };
+    await route.fulfill({response, json: body});
+  });
+  await page.goto('/demo/?year=2042&month=3&tab=today');
+  await expect(page.locator('.office-minimum')).toContainText('사무실 최소 기준 충족');
+  await expect(page.locator('.office-minimum progress')).toHaveCount(0);
+  missing = true;
+  await page.reload();
+  await expect(page.locator('.today-month')).toBeVisible();
+  await expect(page.locator('.office-minimum')).toHaveCount(0);
+});
+
+test('fixed forecast conflicts show no fabricated range', async ({page}) => {
+  await page.route('**/demo/api/month?**', async route => {
+    const response = await route.fetch();
+    const body = await response.json();
+    Object.assign(body.planner.insights.forecast, {minMinutes: null, maxMinutes: null, fixedConflict: true});
+    await route.fulfill({response, json: body});
+  });
+  await page.goto('/demo/?tab=analysis');
+  await expect(page.locator('.forecast-card [role="alert"]')).toContainText('가능한 범위가 없습니다');
+  await expect(page.locator('.forecast-card .forecast-bar')).toHaveCount(0);
+  await expect(page.locator('.forecast-card')).not.toContainText('최대 0:00');
 });

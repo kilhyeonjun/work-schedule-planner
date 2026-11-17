@@ -25,6 +25,7 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
   const d = payload.derived || {};
   const days = payload.days || [];
   const planner = payload.planner;
+  const forecast = planner?.insights?.forecast;
   const plan = planner?.plan;
   const comparisons = planner?.comparisons || [];
   const today = todayIso();
@@ -54,10 +55,12 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
   if (isCurMonth && last && plan?.days?.length) {
     let c = last.cum;
     projPts.push(last);
-    for (const p of plan.days) {
-      if (p.date < today) continue;
-      c += p.plannedAdditionalMinutes ?? p.plannedMinutes ?? 0;
-      projPts.push({day: Number(p.date.slice(8, 10)), cum: c});
+    const recommendations = new Map(plan.days.map(day => [day.date, day.plannedAdditionalMinutes ?? day.plannedMinutes ?? 0]));
+    const dates = [...new Set([...days.map(day => day.date), ...recommendations.keys()])].sort();
+    for (const date of dates) {
+      if (date < today) continue;
+      c += (recommendations.get(date) || 0) + (date > today ? days.find(day => day.date === date)?.recognized_minutes || 0 : 0);
+      projPts.push({day: Number(date.slice(8, 10)), cum: c});
     }
   }
 
@@ -238,7 +241,7 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
               <div className="an-cmp-foot an-legend">
                 <span className="is-pay"><i />세후 수당</span>
                 <span className="is-fat"><i />긴 날 (피로)</span>
-                <span className="an-foot-note">수당은 고정OT 초과분에만 발생</span>
+                <span className="an-foot-note">추천표 도달분 기준 추정 · 고정OT 초과분만 산정</span>
               </div>
             </div>
           </Card>
@@ -247,21 +250,23 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
       </div>
       <div className="an-col">
 
-        {planner?.insights?.forecast && <Card className="forecast-card">
+        {forecast && <Card className="forecast-card">
           <h2>월말 예상 범위</h2>
-          <p className="muted">단축 근무 기준부터 가능한 최대까지 · 현재 인정 포함</p>
-          <div className="forecast-labels"><span>최소 {fmt(planner.insights.forecast.minMinutes)}</span><span>최대 {fmt(planner.insights.forecast.maxMinutes)}</span></div>
-          <div className="forecast-bar" role="img" aria-label={`예상 ${fmt(planner.insights.forecast.expectedMinutes)}, 최소 ${fmt(planner.insights.forecast.minMinutes)}, 최대 ${fmt(planner.insights.forecast.maxMinutes)}`}>
-            <i style={{left: `${Math.max(0, Math.min(100, 100 * (planner.insights.forecast.expectedMinutes - planner.insights.forecast.minMinutes) / Math.max(1, planner.insights.forecast.maxMinutes - planner.insights.forecast.minMinutes)))}%`}} />
-          </div>
-          <b>예상 {fmt(planner.insights.forecast.expectedMinutes)}</b>
+          <p className="muted">날짜 고정·주 52시간·금요일·남은 시간을 반영한 범위 · {forecast.basis === 'target_eligible' ? '추천표와 같은 목표 산입 기준' : '원장 인정 기준'} 추정</p>
+          {forecast.minMinutes != null && forecast.maxMinutes != null ? <>
+            <div className="forecast-labels"><span>최소 {fmt(forecast.minMinutes)}</span><span>최대 {fmt(forecast.maxMinutes)}</span></div>
+            <div className="forecast-bar" role="img" aria-label={`예상 ${fmt(forecast.expectedMinutes)}, 최소 ${fmt(forecast.minMinutes)}, 최대 ${fmt(forecast.maxMinutes)}`}>
+              <i style={{left: `${Math.max(0, Math.min(100, 100 * (forecast.expectedMinutes - forecast.minMinutes) / Math.max(1, forecast.maxMinutes - forecast.minMinutes)))}%`}} />
+            </div>
+          </> : <p role="alert">날짜 고정과 근무 상한이 충돌해 가능한 범위가 없습니다. 고정된 날짜를 확인하세요.</p>}
+          <b>추천표 예상 {fmt(forecast.expectedMinutes)}</b>
         </Card>}
         {/* 수당 효율 */}
         {planner && (
           <Card className="an-card">
             <div className="an-card-h">
               <span className="an-t">수당 효율</span>
-              <span className="an-sum">{selComp?.label || '커스텀'} {fmt(selTarget)} 기준</span>
+              <span className="an-sum">추천표 {fmt(plan?.forecastMinutes)} 도달 기준 추정</span>
             </div>
             <div className="an-card-b">
               <div className="an-tiles">
