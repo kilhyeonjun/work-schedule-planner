@@ -7,6 +7,7 @@ from functools import lru_cache
 from itertools import combinations
 from typing import Any
 
+from .insights import month_insights
 from .planner import plan_month
 
 DEMO_YEAR = 2042
@@ -14,6 +15,13 @@ DEMO_MONTH = 3
 DEMO_TODAY = dt.date(DEMO_YEAR, DEMO_MONTH, 4)
 DEFAULT_TARGET = 7_800
 WEEKDAYS = "월화수목금토일"
+
+
+def nine_hour_target_minutes(year: int, month: int) -> int:
+    return 540 * sum(
+        dt.date(year, month, day).weekday() < 5
+        for day in range(1, calendar.monthrange(year, month)[1] + 1)
+    )
 
 
 def _clock(minutes: int) -> str:
@@ -227,7 +235,7 @@ def _comparison(
         "status": plan["status"],
         "remainingMinutes": max(0, target - plan["recognizedBaselineMinutes"]),
         "gapMinutes": plan["gapMinutes"],
-        "effortLabel": {"target": "낮음", "fixed_ot": "보통", "max": "높음"}[key],
+        "effortLabel": {"target": "낮음", "nine_hour": "높음", "fixed_ot": "보통", "max": "높음"}[key],
         "effortMessage": "합성 데이터 기반 시뮬레이션",
         "projectedExtraPayAfterTaxKrw": 0,
         "summary": {
@@ -341,7 +349,12 @@ def month_payload(
     }
     if archive:
         return base
-    options = [("target", "최소 기준", 7200), ("fixed_ot", "수당 기준선", 7800), ("max", "상한", 9000)]
+    options = [
+        ("target", "최소 기준", 7200),
+        ("nine_hour", "9시간", nine_hour_target_minutes(year, month)),
+        ("fixed_ot", "수당 기준선", 7800),
+        ("max", "상한", 9000),
+    ]
     comparison_plans = []
     for key, label, value in options:
         comparison_plan = result if value == target else _demo_plan(year, month, value, normal, long, short, False)
@@ -379,6 +392,7 @@ def month_payload(
             "inProgressRecognizedMinutes": 0,
             "remainingMinutes": max(0, target - total_recognized),
             "plannedTotalMinutes": result["plannedAdditionalMinutes"],
+            "forecastMinutes": total_recognized + result["plannedAdditionalMinutes"],
             "gapMinutes": result["gapMinutes"],
             "projectedOverFixedMinutes": 0,
             "projectedExtraPayPreTaxKrw": 0,
@@ -397,6 +411,9 @@ def month_payload(
             "todayAction": {"kind": "workday", "date": today_plan["date"], "window": today_window, "decisionTitle": "오늘은 계획대로 진행", "message": "합성 데이터 기반 권장", "workedMinutes": today_plan["currentWorkedMinutes"], "remainingTodayMinutes": today_plan["plannedAdditionalMinutes"], "recommendedLeaveTime": today_window[-5:], "minimumTargetRemainingTodayMinutes": today_plan["plannedAdditionalMinutes"]},
         },
     }
+    base["planner"]["insights"] = month_insights(
+        base, now=dt.datetime.combine(DEMO_TODAY, dt.time(12), dt.timezone(dt.timedelta(hours=9)))
+    )
     return base
 
 

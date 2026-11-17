@@ -65,12 +65,25 @@ export type Strategy = {
   fridayLongDays?: number; bufferDate?: string; longDays?: number; projectedExtraPayAfterTaxKrw?: number;
 };
 
+export type PlannerInsights = {
+  asOf: string;
+  guards: {key: string; level: 'risk' | 'breach'; weekKey?: string; date?: string; label: string; minutes: number; limitMinutes: number}[];
+  leaveNow: null | {date: string; workedMinutes: number; todayRemainingMinutes: number; remainingWorkdays: number;
+    averageDailyBeforeMinutes: number; averageDailyAfterMinutes: number; additionalPerDayMinutes: number; feasible: boolean; shortfallMinutes: number};
+  forecast: {recognizedMinutes: number; expectedMinutes: number; minMinutes: number; maxMinutes: number};
+  targets?: {key: 'base' | 'nine_hour' | 'fixed_ot' | 'max'; label: string; minutes: number; achievedPercent: number; officialPercent: number;
+    requiredDailyMinutes: number; requiredFeasible: boolean; etaDate: string | null; projectedMinutes: number; projectedPercent: number; shortfallMinutes: number}[];
+  pace?: {totalWorkdays: number; completedWorkdays: number; remainingWorkdays: number; expectedPercent: number};
+  burnRateMinutes?: number;
+};
+
 export type MonthPayload = {
   ok: boolean; dataOrigin?: 'synthetic'; year: number; month: number; collectedAt?: string;
   derived: Record<string, number>;
   days: DayRow[];
   planner?: {
     targetOptions?: TargetOption[]; selectedTargetMinutes?: number;
+    insights?: PlannerInsights | null;
     settings?: WorkSettings; comparisons?: Comparison[]; strategy?: Strategy; plan?: Plan;
   };
   ui?: {readOnly?: boolean; archiveMode?: boolean; targetConfiguration?: {enabled?: boolean}};
@@ -120,7 +133,7 @@ export const fmt = (m?: number) => {
 export const krw = (n?: number) => Math.round(Number(n || 0)).toLocaleString('ko-KR');
 export const todayIso = () => {
   const d = nowDate();
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return new Intl.DateTimeFormat('sv-SE', {timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit'}).format(d);
 };
 
 export const kindLabel = (kind?: string) =>

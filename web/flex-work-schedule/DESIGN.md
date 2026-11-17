@@ -1,93 +1,39 @@
----
-version: alpha
-name: Terminal Ledger v4
-description: Compact dark operational UI for deterministic work-schedule decisions.
-colors:
-  background: "#0B0C0E"
-  panel: "#131518"
-  surface: "#1B1E23"
-  line: "#26292F"
-  ink: "#EDEEF0"
-  muted: "#8A9098"
-  primary: "#6E7CFF"
-  success: "#3ECF8E"
-  warning: "#F5A54E"
-  danger: "#F56E6E"
-typography:
-  body:
-    fontFamily: Pretendard
-    fontSize: 14px
-    fontWeight: 400
-    lineHeight: 1.45
-  data:
-    fontFamily: JetBrains Mono
-    fontSize: 13px
-    fontWeight: 500
-    lineHeight: 1.4
-rounded:
-  control: 8px
-  card: 12px
-  sheet: 16px
-spacing:
-  xs: 4px
-  sm: 8px
-  md: 12px
-  lg: 16px
-  xl: 24px
-components:
-  strategy-panel:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.card}"
-    padding: 12px
-  strategy-control:
-    backgroundColor: "{colors.background}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.control}"
-    height: 44px
-  strategy-control-active:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.background}"
-    rounded: "{rounded.control}"
-    height: 44px
----
+# Flex planner — draft A
 
-## Overview
+Approved reference: `../../docs/design/drafts/2026-11-17-planner-redesign/a-*.html` and `a.css`. The harness dashboard supplies the interaction and surface language; the planner supplies its own domain decisions. Korean labels use self-hosted Pretendard with tabular numerals, never a Korean monospace face. No CDN, remote font, or inline script is required.
 
-Terminal Ledger is a compact decision surface, not a decorative dashboard. Preserve the existing app shell, route structure, dense calendar, and deterministic API-owned calculations. Indigo is the only primary interaction accent.
+## System
 
-## Colors
+HeroUI v3 (`@heroui/react` / `@heroui/styles` 3.2.7), the dashboard's React Aria pins, and Tailwind 4.3.4 via the Vite plugin. `src/heroui.css` imports only rendered component sheets: Button, ToggleButton/Group, Chip and Card. Add a sheet there when adding a HeroUI primitive. `index.css` owns shell, theme mapping and the shared strategy panel; each tab owns its layout sheet.
 
-Near-black surfaces separate shell, panel, and card depth with borders rather than gradients. Semantic colors identify work-day kinds and system status. Muted text is secondary only; controls and values use `ink`.
+Native button resets stay in `@layer base` so they cannot erase HeroUI component padding/backgrounds. The `planner-segments` group gives targets and desktop themes separately padded pill segments, 3px gaps and accent-soft selection.
 
-## Typography
+The default theme follows the OS. Desktop theme choices (자동/밝게/어둡게) persist under `work-planner.theme` and react to OS changes in automatic mode. Light and dark both use the HeroUI theme. Text stays in foreground/muted/accent colors; warning/danger status uses dots, chip edges or borders rather than low-contrast colored text. Cards have 20px corners, secondary surfaces 16px, and primary controls pill/12px shapes.
 
-Pretendard carries Korean labels and body copy. JetBrains Mono is required for dates, durations, targets, and computed values. Keep tabular numerals aligned.
+## Navigation and hierarchy
 
-## Layout
+At 1024px and above: 220px sticky left menu (오늘/계획/달력/분석/기록), theme at its foot. Below 1024px: five bottom tabs, safe-area padding and 44px control targets. The header contains the title, KST `HH:MM 기준`, month stepper, target segmented choice, shared strategy control, collection freshness, nonempty guard count and 새로 고침. Compact mobile controls wrap without a horizontal page scroll. Stale-content recomputation is nonblocking and explicitly says 업데이트 중.
 
-The strategy control is globally reachable from the header on every current-month page. Desktop uses an anchored popover no wider than 420px. Mobile uses a bottom sheet with safe-area padding, bounded vertical scrolling, and no horizontal overflow. Existing page content remains visible during recomputation.
+- Today: recommended leave time and collected-versus-estimated work; month progress; arithmetic 지금 퇴근하면; upcoming workdays, original intervals and notifications. Off-days lead with the next workday instead. Nonempty guard details precede the decision.
+- Plan: goal choice → feasibility → recommended schedule grouped by week → method/weekly ceilings. Desktop rows become phone list rows; each week can collapse. Selecting a row opens a duration what-if (휴가 0/단축/보통/긴 날), previews month totals/adjustments and permits local save only with the returned preview token. In this simulator 휴가 0 means zero planned work, not a Flex leave request. Demo 405 responses explain unavailability, never fabricate a projection.
+- Calendar: desktop month grid, phone week groups/mini-cells/disclosure rows; both select the same date detail. The existing exact duration/window/break editor, lock preference, preview/save/reset and raw recorded data remain available.
+- Analysis: cumulative burn-up with separated goal/OT labels, projected trace, selectable after-tax-pay versus long-day comparison, optional min/expected/max forecast bar, pay efficiency and recent trend.
+- Record: archive year/month navigation, actual/leave/recognized totals, four-month trend and paginated daily records. Phone weeks disclose the same page rows with secondary data included.
 
-## Elevation & Depth
+Default disclosure state keeps the decision compact: Calendar opens only today's week (first week for another month), while Plan opens the current and following week. Manual expansion remains scoped to the viewed month. Four strategy cards occupy one desktop row and a 2×2 phone grid. Today hides minimum-goal remainder only when it duplicates the selected-strategy remainder.
 
-Use one bordered surface and a restrained dark shadow for the floating strategy panel. Do not introduce gradients, glass effects, or new page-level surfaces.
+`TargetProgress.tsx` is shared by Today (compact card) and Analysis (desktop comparison columns / phone rows). Four server-owned target facts show current progress against the elapsed-workday marker, burn rate and completed/total workdays, required daily minutes, ETA or month-end shortfall. Analysis adds official/current percentages and projected month-end totals/percentages. An infeasible daily requirement uses a warning dot with neutral text. Four target presets wrap in a full-width mobile segmented group rather than a scrolling strip.
 
-## Shapes
+## State and domain boundaries
 
-Controls use 8px corners, cards 12px, and the mobile sheet 16px top corners. Every interactive target is at least 44px on mobile.
+`main.tsx` remains the owner of year/month/target/normal/long/short/tab/selectedDate plus daily-average state, URL push/replace/popstate, preferences and cross-tab settings. `lib.ts` retains `/api/month` and `/api/archive`, `/demo/api/*` isolation, abort-on-supersession, and stale same-month data. Archive months expose only calendar/archive and no target/tuning controls.
 
-## Components
+The shared strategy panel is the only settings implementation: presets, exact custom target, 1-minute range/steppers, 285-minute floor and baseline reset; changes apply immediately. It preserves Escape, focus trap, inert background, scrim dismissal and focus restoration. Strategy cards only select the shared target.
 
-The shared strategy panel contains target presets, exact target adjustment, and normal/long/short work-duration controls. Every adjustable value has a native range input with one-minute steps, an `HH:MM` readout, and one-minute decrement/increment buttons. Normal and short durations never go below the 285-minute core-time floor. A reset action restores defaults. Changes update local control state and URL immediately, preserve stale page content, abort superseded requests, and show a non-blocking `업데이트 중` state until the latest response lands.
+`planner.insights` is optional: no planner/insights in archive months is normal. Guards, leave-now arithmetic and forecast are server-owned read-model facts, not client reimplementations. Local overrides never write to Flex. The existing preview/save endpoint owns reconciliation and tokens. `POST /api/sync` is shown only for stale or >30-minute collection age outside demo; started/running/cooldown/unavailable are disclosed and cooldown disables repeat requests. Requests use same-origin credentials, `X-Planner-Action: sync`, `Content-Type: application/json` and body `{}`. A forbidden response is displayed as unavailable.
 
-The plan page may summarize or compare strategies but must not own a second settings implementation.
+## Review and checks
 
-## Do's and Don'ts
+`tests/e2e/demo.spec.ts` exercises desktop 1440×1000 and phone 390×844, public-route isolation, URL/history/settings, archive gating, previews/windows, optional insights, disclosure/overflow and themes. Playwright owns port 18789, not a preexisting preview server. Run with a temporary HOME (and temporary data directories if adding private fixtures).
 
-- Do keep target and work-duration state in one app-level source of truth.
-- Do expose the same panel from Today, Plan, Calendar, Analysis, and current-month Record views.
-- Do preserve keyboard operation, focus trapping, Escape, backdrop, and focus restoration.
-- Do keep the simulation read-only against Flex.
-- Don't require an Apply button; changes are immediate.
-- Don't blank the page or move scroll position during recomputation.
-- Don't add invented business metrics, navigation, or visual language.
+The immutable source manifest is checked by `tests/test_demo.py::test_reviewed_frontend_manifest_is_immutable`: every file under `src`, including self-hosted fonts, must appear with its SHA-256. Regenerate after reviewed source edits with a sorted recursive file list and `hashlib.sha256(path.read_bytes()).hexdigest()`; preserve manifest version 1.

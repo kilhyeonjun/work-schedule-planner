@@ -36,6 +36,7 @@ export function CalendarTab(props: TabProps) {
   const [previewPayload, setPreviewPayload] = useState<MonthPayload | null>(null);
   const [previewResult, setPreviewResult] = useState<{selectedLocked?: boolean; adjustments?: {date: string; beforeMinutes: number; afterMinutes: number}[]; targetMinutes?: number; plannedTotalMinutes?: number; gapMinutes?: number; overTargetMinutes?: number; reason?: string | null} | null>(null);
   const [previewToken, setPreviewToken] = useState('');
+  const [weekExpansion, setWeekExpansion] = useState<Record<string, boolean>>({});
   useEffect(() => { setPreviewedMinutes(undefined); setPreviewToken(''); setPreviewResult(null); setOverrideState('idle'); setOverrideMessage(''); }, [selectedDate]);
   useEffect(() => { setPreviewPayload(null); setPreviewResult(null); }, [payload]);
   const displayedPayload = previewPayload || payload;
@@ -84,6 +85,7 @@ export function CalendarTab(props: TabProps) {
   }
   const weeks: CellInfo[][] = [];
   for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+  const defaultWeek = Math.max(0, weeks.findIndex(week => week.some(cell => cell.inMonth && cell.iso === today)));
 
   const planResult = displayedPayload.planner?.plan;
   const actualTotal = cells.reduce((s, c) => s + (c.inMonth && c.row ? Number(c.row.work_minutes || 0) : 0), 0);
@@ -194,6 +196,7 @@ export function CalendarTab(props: TabProps) {
         body: JSON.stringify({date: selectedDate, target: selected, normal: settings.normalDayMinutes, long: settings.longDayMinutes, short: settings.shortDayMinutes,
           ...(action === 'reset' ? {} : {minutes: editingMinutes, locked, ...(editMode === 'window' && editingMinutes > 0 ? {window: {start: startTime, end: endTime, breakMinutes}} : {})}), ...(action === 'save' ? {previewToken} : {})}),
       });
+      if (response.status === 405 && window.location.pathname.startsWith('/demo')) throw new Error('데모에서는 미리보기·로컬 저장을 사용할 수 없습니다. 실제 앱에서 이용해 주세요.');
       const body = await response.json();
       if (!response.ok || !body.ok || !body.preview) throw new Error(body.error || `HTTP ${response.status}`);
       setPreviewPayload(body.preview);
@@ -378,6 +381,7 @@ export function CalendarTab(props: TabProps) {
             <div className="plan-feas plan-feas--warn" role="alert">
               <span className="plan-feas__st">배치 부족</span>
               <span className="plan-feas__msg">부족 {fmt(planResult.gapMinutes)} · {planResult.feasibility?.targetReductionMinutes ? `목표 하향 ${fmt(planResult.feasibility.targetReductionMinutes)}` : '제약 확인 필요'}</span>
+              {planResult.feasibility?.possibleTargetMinutes != null && <button onClick={() => props.setTarget(planResult.feasibility!.possibleTargetMinutes!)}>가능한 최대 적용 {fmt(planResult.feasibility.possibleTargetMinutes)}</button>}
             </div>
           )}
           <div className="cal-card__b">
@@ -385,6 +389,24 @@ export function CalendarTab(props: TabProps) {
               {DOW.map(d => <div key={d} className="cal-dow">{d}</div>)}
               <div className="cal-dow cal-dow--g">주계</div>
               {weeks.map((week, i) => [...week.map(renderCell), renderWsum(week, i)])}
+            </div>
+            <div className="cal-mobile-weeks">
+              {weeks.map((week, index) => {
+                const key = `${year}-${month}-${index}`;
+                const open = weekExpansion[key] ?? index === defaultWeek;
+                return <section key={key} className="cal-mobile-week">
+                <button className="cal-week-toggle" aria-expanded={open} onClick={() => setWeekExpansion(previous => ({...previous, [key]: !(previous[key] ?? index === defaultWeek)}))}>
+                  <b>{md(week.find(cell => cell.inMonth)?.iso || week[0].iso)} 주</b>
+                  <span>인정·계획 {fmt(week.reduce((sum, cell) => sum + (cell.inMonth ? ((cell.row ? recMin(cell.row) : 0) + (cell.plan?.plannedAdditionalMinutes || 0)) : 0), 0))}</span>
+                  <span aria-hidden="true">{open ? '⌃' : '⌄'}</span>
+                </button>
+                <div className="cal-week-mini">{week.map(renderCell)}</div>
+                {open && <div className="cal-week-list">{week.filter(cell => cell.inMonth && (cell.row || cell.plan)).map(cell => <button key={cell.iso} onClick={() => setSelectedDate(cell.iso)} className="cal-week-row">
+                  <span>{md(cell.iso)} {cell.row?.weekday || cell.plan?.weekday}</span><span>{cell.plan ? kindLabel(cell.plan.kind) : dayTypeLabel(cell.row?.day_type)}</span>
+                  <span>{cell.plan?.window || [cell.row?.first_start, cell.row?.last_end].filter(Boolean).join('–') || '기록 없음'}</span>
+                  <b>{fmt(cell.plan?.plannedMinutes ?? (cell.row ? recMin(cell.row) : 0))}</b>
+                </button>)}</div>}
+              </section>; })}
             </div>
             <div className="cal-legend mono">
               <span className="cal-legend__li"><span className="cal-legend__sw" style={{background: 'var(--green)'}} />확정 인정 (11:59 대비 채움)</span>

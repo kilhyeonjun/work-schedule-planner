@@ -2,6 +2,7 @@ import './analysis.css';
 import React from 'react';
 import {Comparison, fmt, krw, pad, TabProps, todayIso} from '../lib';
 import {Card, Skel} from '../ui';
+import {TargetProgress} from '../TargetProgress';
 
 const isWarnRow = (c: Comparison) => {
   const f = c.feasibility;
@@ -78,8 +79,8 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
   if (xTicks[xTicks.length - 1] !== lastDay) xTicks.push(lastDay);
 
   // marker labels: 값이 같으면 페이스 라벨은 중복이라 숨기고, 근접하면 밀어낸다
-  const goalLblY = y(goal) - 5;
   const otLblY = y(fixedOt) - 5;
+  const goalLblY = Math.abs(y(goal) - y(fixedOt)) < 16 ? otLblY + 17 : y(goal) - 5;
   const paceLblHidden = selTarget === fixedOt || selTarget === goal;
   let paceLblY = y(selTarget) - 5;
   if (fixedOt > 0 && Math.abs(paceLblY - otLblY) < 14) paceLblY = otLblY - 14;
@@ -103,6 +104,7 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
   return (
     <div className={`an-grid ${payload && loading ? 'is-refreshing' : ''}`}>
       <div className="an-col">
+        <TargetProgress insights={planner?.insights} detailed />
 
         {/* burn-up */}
         <Card className="an-card">
@@ -162,9 +164,9 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
               {isCurMonth && last && <>
                 <circle className="an-today-dot" cx={x(last.day).toFixed(1)} cy={y(last.cum).toFixed(1)} r="4" />
                 <text className="an-today-val" textAnchor={flip ? 'end' : 'start'}
-                  x={(flip ? x(last.day) - 10 : x(last.day) + 10).toFixed(1)} y={(y(last.cum) + 17).toFixed(1)}>{fmt(last.cum)}</text>
+                  x={(flip ? x(last.day) - 10 : x(last.day) + 10).toFixed(1)} y={Math.min(226, y(last.cum) + 17).toFixed(1)}>{fmt(last.cum)}</text>
                 <text className="an-ax" textAnchor={flip ? 'end' : 'start'}
-                  x={(flip ? x(last.day) - 10 : x(last.day) + 10).toFixed(1)} y={(y(last.cum) + 31).toFixed(1)}>오늘 {month}/{todayDay}</text>
+                  x={(flip ? x(last.day) - 10 : x(last.day) + 10).toFixed(1)} y={Math.min(240, y(last.cum) + 31).toFixed(1)}>오늘 {month}/{todayDay}</text>
               </>}
 
               {/* x axis */}
@@ -186,7 +188,7 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
         {comparisons.length > 0 && (
           <Card className="an-card">
             <div className="an-card-h">
-              <span className="an-t">전략별 비교</span>
+              <span className="an-t">수당과 피로 비교</span>
               <span className="an-sum">세후 수당 · 긴 날 · effort</span>
             </div>
             <div className="an-card-cap">행을 선택하면 해당 전략 기준으로 전체 화면이 다시 계산됩니다</div>
@@ -242,6 +244,15 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
       </div>
       <div className="an-col">
 
+        {planner?.insights?.forecast && <Card className="forecast-card">
+          <h2>월말 예상 범위</h2>
+          <p className="muted">단축 근무 기준부터 가능한 최대까지 · 현재 인정 포함</p>
+          <div className="forecast-labels"><span>최소 {fmt(planner.insights.forecast.minMinutes)}</span><span>최대 {fmt(planner.insights.forecast.maxMinutes)}</span></div>
+          <div className="forecast-bar" role="img" aria-label={`예상 ${fmt(planner.insights.forecast.expectedMinutes)}, 최소 ${fmt(planner.insights.forecast.minMinutes)}, 최대 ${fmt(planner.insights.forecast.maxMinutes)}`}>
+            <i style={{left: `${Math.max(0, Math.min(100, 100 * (planner.insights.forecast.expectedMinutes - planner.insights.forecast.minMinutes) / Math.max(1, planner.insights.forecast.maxMinutes - planner.insights.forecast.minMinutes)))}%`}} />
+          </div>
+          <b>예상 {fmt(planner.insights.forecast.expectedMinutes)}</b>
+        </Card>}
         {/* 수당 효율 */}
         {planner && (
           <Card className="an-card">

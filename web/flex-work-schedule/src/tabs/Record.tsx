@@ -224,6 +224,7 @@ export function RecordTab({payload, loading, archive, archiveMode, year, month, 
               </tbody>
             </table>
           </div>
+          <MobileRecordList rows={pageRows} />
           {pageCount > 1 && (
             <div className="rec-pager">
               <span className="rec-pinfo mono">
@@ -245,4 +246,25 @@ export function RecordTab({payload, loading, archive, archiveMode, year, month, 
       </div>
     </div>
   );
+}
+
+function MobileRecordList({rows}: {rows: DayRow[]}) {
+  const [closed, setClosed] = useState<Set<string>>(new Set());
+  const groups = new Map<string, DayRow[]>();
+  rows.forEach(row => {
+    const date = new Date(`${row.date}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7);
+    const key = date.toISOString().slice(0, 10);
+    groups.set(key, [...(groups.get(key) || []), row]);
+  });
+  return <div className="rec-mobile-list">{[...groups].map(([key, days]) => <section key={key}>
+    <button className="rec-week-toggle" aria-expanded={!closed.has(key)} onClick={() => setClosed(previous => { const next = new Set(previous); if (next.has(key)) next.delete(key); else next.add(key); return next; })}>
+      <b>{Number(days[0].date.slice(5, 7))}/{Number(days[0].date.slice(8))} 주</b><span>인정 {fmt(days.reduce((sum, day) => sum + recMin(day), 0))}</span><span aria-hidden="true">{closed.has(key) ? '⌄' : '⌃'}</span>
+    </button>
+    {!closed.has(key) && days.map(day => <div key={day.date} className="rec-mobile-row">
+      <b>{Number(day.date.slice(5, 7))}/{Number(day.date.slice(8))} {day.weekday}</b><span>{kindText(day)}</span><b>{fmt(recMin(day))}</b>
+      <p>{day.first_start || '—'} – {day.last_end || '—'} · 사무실 {fmt(day.office_minutes)} · 재택 {fmt(day.remote_minutes)} · 휴가 {fmt(day.timeoff_minutes)}</p>
+      {!!day.notes?.length && <p>{day.notes.join(' · ')}</p>}
+    </div>)}
+  </section>)}</div>;
 }
