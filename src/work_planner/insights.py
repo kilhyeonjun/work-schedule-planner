@@ -11,6 +11,72 @@ def _ceil_average(minutes: int, days: int) -> int:
     return (minutes + days - 1) // days if days else 0
 
 
+def _target_progress(payload: dict, today: str) -> dict:
+    """Use official totals for pace; distinguish explicit in-progress recognition."""
+    ledger = {day["date"]: day for day in payload["days"]}
+    workdays = sorted(date for date, day in ledger.items() if day["day_type"] == "workday")
+    completed = [date for date in workdays if date < today]
+    remaining = [date for date in workdays if date >= today]
+    derived = payload["derived"]
+    official = derived["recognizedMinutes"]
+    planner = payload.get("planner") or {}
+    current = (payload.get("truth") or {}).get("current") or {}
+    in_progress = (planner.get("plan") or {}).get("inProgressRecognizedMinutes")
+    if in_progress is None and "effectiveRecognizedMinutes" in current and "sourceRecognizedMinutes" in current:
+        in_progress = max(0, current["effectiveRecognizedMinutes"] - current["sourceRecognizedMinutes"])
+    if in_progress is None:
+        day = ledger.get(today, {})
+        prior_recognized = sum(
+            row.get("recognized_minutes", 0) for date, row in ledger.items() if date < today
+        )
+        # Without explicit provenance, an ongoing row is in-progress. A finished
+        # row is added only when official equals the prior-day ledger total.
+        in_progress = day.get("recognized_minutes", 0) if (
+            day.get("is_ongoing", False) or official == prior_recognized
+        ) else 0
+    effective = official + in_progress
+    burn_rate = round(official / len(completed)) if completed else None
+    projected = official + (burn_rate or 0) * len(remaining)
+    long_cap = planner.get("settings", {}).get("longDayMinutes", 719)
+    targets = []
+    for key, label, minutes in [
+        ("base", "8시간(소정)", derived.get("targetMinutes", 0)),
+        ("nine_hour", "9시간", len(workdays) * 540),
+        ("fixed_ot", "고정OT", derived.get("fixedOtMinutes", 0)),
+        ("max", "최대", derived.get("maxMinutes", 0)),
+    ]:
+        if minutes <= 0:
+            continue
+        required = _ceil_average(max(0, minutes - official), len(remaining))
+        eta = None
+        if official >= minutes:
+            eta = completed[-1] if completed else today
+        elif burn_rate is not None:
+            eta = next(
+                (date for index, date in enumerate(remaining, 1)
+                 if official + burn_rate * index >= minutes),
+                None,
+            )
+        targets.append({
+            "key": key, "label": label, "minutes": minutes,
+            "achievedPercent": round(effective / minutes * 100, 1),
+            "officialPercent": round(official / minutes * 100, 1),
+            "requiredDailyMinutes": required, "requiredFeasible": required <= long_cap,
+            "etaDate": eta, "projectedMinutes": projected,
+            "projectedPercent": round(projected / minutes * 100, 1),
+            "shortfallMinutes": max(0, minutes - projected),
+        })
+    return {
+        "pace": {
+            "totalWorkdays": len(workdays), "completedWorkdays": len(completed),
+            "remainingWorkdays": len(remaining),
+            "expectedPercent": round(len(completed) / len(workdays) * 100, 1) if workdays else 0.0,
+        },
+        "burnRateMinutes": burn_rate,
+        "targets": targets,
+    }
+
+
 def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
     """Derive read-only projections; naive ``now`` is interpreted as KST.
 
@@ -97,6 +163,7 @@ def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
     today_long = max(0, settings["longDayMinutes"] - today_worked) if leave_now is not None else 0
     return {
         "asOf": now.isoformat(timespec="minutes")[:16],
+        **_target_progress(payload, today),
         "guards": guards,
         "leaveNow": leave_now,
         "forecast": {

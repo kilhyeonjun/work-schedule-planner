@@ -212,3 +212,136 @@ def test_demo_attaches_insights_and_route_serializes_them():
     status, _, body = route("GET", "/demo/api/month", "")
     assert status == 200
     assert json.loads(body)["planner"]["insights"] == source["planner"]["insights"]
+
+
+def progress_payload():
+    """Synthetic month exercising official versus in-progress recognition."""
+    source = payload()
+    days = []
+    for number in range(1, 31):
+        date = dt.date(2026, 11, number)
+        workday = date.weekday() < 5
+        recognized = 584 if workday and number < 17 else 0
+        if number == 16:
+            recognized = 582
+        if number == 17:
+            recognized = 430
+        days.append({
+            "date": date.isoformat(), "day_type": "workday" if workday else "weekend",
+            "recognized_minutes": recognized, "work_minutes": recognized,
+            "rest_minutes": 60, "is_ongoing": number == 17,
+        })
+    source["days"] = days
+    source["derived"] = {
+        "recognizedMinutes": 6422, "targetMinutes": 10080,
+        "fixedOtMinutes": 12420, "maxMinutes": 14028,
+    }
+    source["planner"]["settings"]["longDayMinutes"] = 719
+    return source
+
+
+PROGRESS_NOW = dt.datetime(2026, 11, 17, 15, tzinfo=NOW.tzinfo)
+
+
+def test_four_target_progress_synthetic_month():
+    insights = month_insights(progress_payload(), now=PROGRESS_NOW)
+    assert insights["pace"] == {
+        "totalWorkdays": 21, "completedWorkdays": 11,
+        "remainingWorkdays": 10, "expectedPercent": 52.4,
+    }
+    assert insights["burnRateMinutes"] == 584
+    targets = insights["targets"]
+    assert [target["key"] for target in targets] == ["base", "nine_hour", "fixed_ot", "max"]
+    assert [target["label"] for target in targets] == ["8시간(소정)", "9시간", "고정OT", "최대"]
+    assert [target["minutes"] for target in targets] == [10080, 11340, 12420, 14028]
+    assert [target["achievedPercent"] for target in targets] == [68.0, 60.4, 55.2, 48.8]
+    assert [target["officialPercent"] for target in targets] == [63.7, 56.6, 51.7, 45.8]
+    assert [target["requiredDailyMinutes"] for target in targets] == [366, 492, 600, 761]
+    assert [target["requiredFeasible"] for target in targets] == [True, True, True, False]
+    assert [target["etaDate"] for target in targets] == ["2026-11-25", "2026-11-27", None, None]
+    assert [target["projectedMinutes"] for target in targets] == [12262] * 4
+    assert [target["shortfallMinutes"] for target in targets] == [0, 0, 158, 1766]
+    assert [target["projectedPercent"] for target in targets] == [121.6, 108.1, 98.7, 87.4]
+
+
+@pytest.mark.parametrize("explicit", ["plan", "truth", "finished_excluded", "finished_included"])
+def test_effective_progress_provenance_and_no_double_count(explicit):
+    source = progress_payload()
+    if explicit == "plan":
+        source["planner"]["plan"]["inProgressRecognizedMinutes"] = 100
+        effective = 6522
+    elif explicit == "truth":
+        source["truth"] = {"current": {"sourceRecognizedMinutes": 6422, "effectiveRecognizedMinutes": 6522}}
+        effective = 6522
+    else:
+        source["days"][16]["is_ongoing"] = False
+        effective = 6852
+        if explicit == "finished_included":
+            source["derived"]["recognizedMinutes"] = 6852
+    target = month_insights(source, now=PROGRESS_NOW)["targets"][0]
+    assert target["achievedPercent"] == round(effective / 10080 * 100, 1)
+
+
+def test_demo_explicit_zero_in_progress_is_not_added_twice():
+    source = month_payload()
+    insights = source["planner"]["insights"]
+    for target in insights["targets"]:
+        assert target["achievedPercent"] == target["officialPercent"]
+
+
+def test_first_workday_burn_rate_is_unknown_and_projection_stays_official():
+    source = progress_payload()
+    source["derived"]["recognizedMinutes"] = 0
+    now = dt.datetime(2026, 11, 2, 12, tzinfo=NOW.tzinfo)
+    insights = month_insights(source, now=now)
+    assert insights["burnRateMinutes"] is None
+    assert insights["pace"]["completedWorkdays"] == 0
+    assert insights["pace"]["remainingWorkdays"] == 21
+    assert insights["pace"]["expectedPercent"] == 0.0
+    assert all(target["etaDate"] is None for target in insights["targets"])
+    assert all(target["projectedMinutes"] == 0 for target in insights["targets"])
+
+
+@pytest.mark.parametrize("now,eta", [
+    (dt.datetime(2026, 11, 2, 12, tzinfo=NOW.tzinfo), "2026-11-02"),
+    (PROGRESS_NOW, "2026-11-16"),
+])
+def test_already_achieved_target_eta(now, eta):
+    source = progress_payload()
+    source["derived"]["targetMinutes"] = 6000
+    target = month_insights(source, now=now)["targets"][0]
+    assert target["etaDate"] == eta
+    assert target["requiredDailyMinutes"] == 0
+    assert target["shortfallMinutes"] == 0
+
+
+def test_no_workdays_and_nonpositive_targets():
+    source = progress_payload()
+    for day in source["days"]:
+        day["day_type"] = "holiday"
+    source["derived"].update(targetMinutes=0, fixedOtMinutes=-1)
+    insights = month_insights(source, now=PROGRESS_NOW)
+    assert insights["pace"] == {
+        "totalWorkdays": 0, "completedWorkdays": 0,
+        "remainingWorkdays": 0, "expectedPercent": 0.0,
+    }
+    assert insights["burnRateMinutes"] is None
+    assert [target["key"] for target in insights["targets"]] == ["max"]
+    target = insights["targets"][0]
+    assert target["requiredDailyMinutes"] == 0
+    assert target["etaDate"] is None
+
+
+def test_target_progress_default_cap_and_kst_boundary():
+    source = progress_payload()
+    source["planner"]["settings"].pop("longDayMinutes")
+    # Progress uses a default cap independently; existing forecast settings still
+    # require explicit planner settings, so exercise the pure progress helper.
+    from work_planner.insights import _target_progress
+
+    assert _target_progress(source, "2026-11-17")["targets"][-1]["requiredFeasible"] is False
+    source["planner"]["settings"]["longDayMinutes"] = 719
+    expected = month_insights(source, now=PROGRESS_NOW)
+    assert month_insights(source, now=PROGRESS_NOW.astimezone(dt.UTC)) == expected
+    source["days"].reverse()
+    assert month_insights(source, now=PROGRESS_NOW) == expected

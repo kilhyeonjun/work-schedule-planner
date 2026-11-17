@@ -43,3 +43,32 @@ settings, respectively. If today is a workday with remaining planned work, each
 bound also includes today's nonnegative remainder at its corresponding setting
 after subtracting already worked minutes. The selected target's feasibility
 value is not a capacity bound and is never used for the forecast range.
+
+### Target pace and burn rate
+
+Pace counts ledger `workday` dates: completed dates precede KST today; remaining
+dates include today. Expected progress is completed / total workdays. Burn rate
+is official `derived.recognizedMinutes` divided by completed workdays, rounded to
+whole minutes (Python nearest-even rounding); it is unknown before any completed
+workday. Percentages use one decimal place and may exceed 100%.
+
+Targets are base (`derived.targetMinutes`), nine-hour (total workdays × 540),
+fixed OT (`derived.fixedOtMinutes`), and maximum (`derived.maxMinutes`), in that
+order; nonpositive targets are omitted. Official percentages use only official
+recognition. Achieved percentages add explicit `plan.inProgressRecognizedMinutes`
+when present (including explicit zero), otherwise the truth record's effective
+minus source recognition. Without explicit provenance, today's ongoing ledger
+recognition is in-progress; a finished today's row is added only when official
+recognition equals the sum of prior ledger recognition, avoiding double counting.
+The demo explicitly supplies zero in-progress recognition.
+
+Required daily work rounds up the positive target-minus-official gap divided by
+remaining workdays (zero when none remain); feasibility compares it with the
+long-day setting, defaulting to 719. Burn-rate projection adds burn rate ×
+remaining workdays to official recognition, or stays official when rate is
+unknown. ETA is the first remaining workday reaching the target at that rate;
+already achieved targets use the last completed workday (today if none).
+Unreached targets have no ETA and expose projected shortfall. These are
+arithmetic pace estimates, not constrained-plan guarantees. Pace and target
+calculations do not use selected-plan allocations; archive months still return
+no insights.
