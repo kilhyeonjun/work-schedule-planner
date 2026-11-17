@@ -1,5 +1,6 @@
 /* Monthly evidence: burn-up, pay versus fatigue, and forecast range. */
 .an-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr); gap: 16px; align-items: start; }
+.an-grid > .plan-feas { grid-column: 1 / -1; min-width: 0; }
 .an-col { display: grid; gap: 16px; min-width: 0; }
 .an-card-h { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; padding: 20px 22px 0; }
 .an-t { font-size: 16px; font-weight: 600; }

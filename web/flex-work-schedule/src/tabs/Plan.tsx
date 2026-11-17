@@ -1,7 +1,7 @@
 import './plan.css';
 import React, {useEffect, useState} from 'react';
 import {Button} from '@heroui/react';
-import {fmt, kindLabel, krw, MonthPayload, PlannerDay, TabProps, todayIso} from '../lib';
+import {currentRecognized, fmt, kindLabel, krw, MonthPayload, planState, PlannerDay, TabProps, todayIso} from '../lib';
 import {Card, Guards, Skel} from '../ui';
 import {OverridePreview} from '../OverridePreview';
 
@@ -18,8 +18,7 @@ export function PlanTab({payload, loading, selected, setTarget, settings}: TabPr
   const plan = planner.plan;
   const days = (plan.days || []).filter(day => day.plannedMinutes > 0 || day.currentWorkedMinutes || day.isDateOverride);
   const weeks = plan.summary?.weekly || [];
-  const feasibility = plan.feasibility;
-  const insufficient = plan.status === 'insufficient_slots' || (plan.gapMinutes || feasibility?.gapMinutes || 0) > 0;
+  const state = planState(plan, displayed);
   const groups = weeks.map(week => ({key: week.key, label: week.label, projected: week.projectedActualMinutes ?? ((week.actualMinutes || 0) + (week.plannedAdditionalMinutes || 0)), limit: week.weeklyMaxMinutes || 3120,
     days: days.filter(day => week.dates?.includes(day.date))}));
   const grouped = new Set(groups.flatMap(group => group.days.map(day => day.date)));
@@ -44,21 +43,20 @@ export function PlanTab({payload, loading, selected, setTarget, settings}: TabPr
         <span>{comparison.label}{comparison.targetMinutes === selected ? ' · 선택됨' : ''}</span><b>{fmt(comparison.targetMinutes)}</b>
         <span className="muted">세후 +{krw(comparison.projectedExtraPayAfterTaxKrw)}원 · 긴 날 {comparison.summary?.longDays || 0}회 · {comparison.effortLabel}</span>
       </button>)}</div>
-      <div className="plan-summary"><span className="chip">{insufficient ? '배치 부족' : '배치 가능'}</span><span>남은 실제 근무 <b>{fmt(plan.remainingMinutes)}</b> · 계획 <b>{fmt(plan.plannedTotalMinutes)}</b> · 예상 <b>{fmt(plan.forecastMinutes ?? ((plan.recognizedMinutes || 0) + (plan.plannedTotalMinutes || 0)))}</b></span></div>
+      <div className="plan-summary"><span className="chip">{state.label}</span><span>남은 실제 근무 <b>{fmt(plan.remainingMinutes)}</b> · 계획 <b>{fmt(plan.plannedTotalMinutes)}</b> · 목표 산입 예상 <b>{fmt(plan.forecastMinutes ?? ((plan.recognizedMinutes || 0) + (plan.plannedTotalMinutes || 0)))}</b></span></div>
       {(plan.inProgressRecognizedMinutes || 0) > 0 && <p className="muted">Flex 월 집계 {fmt(plan.sourceRecognizedMinutes)} · 집계 반영 대기 +{fmt(plan.inProgressRecognizedMinutes)}</p>}
     </Card>
-    {(insufficient || plan.conflictReason || (plan.overTargetMinutes || 0) > 0) && <div className="plan-feas plan-feas--warn" role="alert">
-      <b>{insufficient ? '배치 부족' : '고정 계획 충돌'}</b><span>{plan.conflictReason || `남은 근무일로 목표를 채울 수 없습니다 · 부족 ${fmt(plan.gapMinutes ?? feasibility?.gapMinutes)}`} · 초과 {fmt(plan.overTargetMinutes)}</span>
-      {feasibility?.requiredLongDayMinutes != null && <span>필요 긴 날 {fmt(feasibility.requiredLongDayMinutes)} · {feasibility.requiredLongDayFeasible ? '가능' : '불가'}</span>}
-      {feasibility?.possibleTargetMinutes != null && <Button variant="secondary" size="sm" onPress={() => setTarget(feasibility.possibleTargetMinutes!)}>가능한 최대 적용 {fmt(feasibility.possibleTargetMinutes)}</Button>}
-    </div>}
+    <div className={`plan-feas ${state.warning ? 'plan-feas--warn' : ''}`} role={state.warning ? 'alert' : 'status'}>
+      <b>{state.label}</b><span>{state.message}</span>{state.hint && <span>{state.hint}</span>}
+      {state.actionTarget != null && <Button variant="secondary" size="sm" onPress={() => setTarget(state.actionTarget!)}>목표를 {fmt(state.actionTarget)}로 변경</Button>}
+    </div>
     {editing && <OverridePreview key={`${editing.date}-${selected}-${settings.normalDayMinutes}-${settings.longDayMinutes}-${settings.shortDayMinutes}`} day={editing} target={selected} settings={settings} onClose={() => setEditing(undefined)} onSave={setSaved} />}
     <div className="plan-layout"><Card className="plan-schedule">
       <div className="row row--between"><h2>추천 근무표</h2><span className="muted">계획 합계 {fmt(plan.plannedTotalMinutes)} · 주말·휴무 숨김</span></div>
-      <p className="muted">현재 인정 {fmt(plan.recognizedMinutes)} · 행을 누르면 다른 근무 길이의 월 영향을 확인합니다</p>
+      <p className="muted">현재 인정 {fmt(currentRecognized(displayed))}{plan.accounting?.currentTargetEligibleMinutes != null && ` · 목표 산입 ${fmt(plan.accounting.currentTargetEligibleMinutes)}`} · 행을 누르면 다른 근무 길이의 월 영향을 확인합니다</p>
       {groups.map(group => <section className="schedule-week" key={group.key}>
         <button className="schedule-week__toggle" aria-expanded={isOpen(group.key)} onClick={() => toggle(group.key)}><b>{group.label}</b><span>{fmt(group.projected)} / {fmt(group.limit)}</span><span aria-hidden="true">{isOpen(group.key) ? '⌃' : '⌄'}</span></button>
-        {isOpen(group.key) && <div className="schedule-rows"><div className="schedule-head"><span>날짜</span><span>구분</span><span>추천 출퇴근</span><span>추가 / 실적 / 휴가</span><span>누적 인정</span></div>
+        {isOpen(group.key) && <div className="schedule-rows"><div className="schedule-head"><span>날짜</span><span>구분</span><span>추천 출퇴근</span><span>추가 / 실적 / 휴가</span><span>누적 목표 산입</span></div>
           {group.days.map(day => <button key={day.date} className={`schedule-row ${day.isToday ? 'is-today' : ''}`} onClick={() => setEditing(day)} aria-label={`${day.date} 가정 바꾸기`}>
             <span>{Number(day.date.slice(5, 7))}/{Number(day.date.slice(8))} {day.weekday}{day.date === todayIso() ? ' · 오늘' : ''}</span>
             <span className={`kind-tag kind-tag--${day.kind}`}>{day.isDateOverride ? '날짜 고정' : kindLabel(day.kind)}</span>

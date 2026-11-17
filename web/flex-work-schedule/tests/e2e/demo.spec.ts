@@ -1,4 +1,5 @@
 import {expect, test} from '@playwright/test';
+import type {MonthPayload} from '../../src/lib';
 
 const forbidden: string[] = [];
 const errors: string[] = [];
@@ -200,15 +201,16 @@ test('mobile renders canonical bottom navigation without page overflow', async (
 
 test('date override requires preview before local save and exposes reset', async ({page}) => {
   await page.setViewportSize({width: 390, height: 844});
-  let preview: Record<string, unknown>;
+  let preview: MonthPayload;
   await page.route('**/demo/api/planner/overrides**', route => route.fulfill({
     contentType: 'application/json', body: JSON.stringify({ok: true, localOnly: true, preview, previewToken: 'demo-preview', overrides: {}}),
   }));
   const monthResponse = page.waitForResponse(response => response.url().includes('/demo/api/month?'));
   await page.goto('/demo/?tab=calendar');
-  preview = await (await monthResponse).json() as Record<string, unknown>;
-  const plan = (preview.planner as {plan: {plannedTotalMinutes: number}}).plan;
+  preview = await (await monthResponse).json();
+  const plan = preview.planner!.plan!;
   plan.plannedTotalMinutes = 123;
+  plan.forecastMinutes = (plan.recognizedMinutes || 0) + 123;
   await page.locator('.cal-cell--plan:visible').first().click();
   await expect(page.getByRole('button', {name: '기본 500'})).toBeVisible();
   await expect(page.getByRole('button', {name: '이 날짜 고정'})).toBeVisible();
@@ -400,7 +402,7 @@ test('plan row what-if previews month impact and uses token for local save', asy
   await page.getByRole('button', {name: '2042-03-05 가정 바꾸기'}).click();
   const panel = page.getByRole('region', {name: '날짜별 가정'});
   await expect(panel.getByRole('button', {name: '로컬 저장'})).toBeDisabled();
-  await panel.getByRole('button', {name: /휴가 0/}).click();
+  await panel.getByRole('button', {name: '근무 배정 없음 0:00'}).click();
   await expect(panel).toContainText('계획 합계 2:03');
   expect(previewBody.minutes).toBe(0);
   await panel.getByRole('button', {name: '로컬 저장'}).click();
@@ -474,4 +476,199 @@ test('collection request discloses started, running, cooldown and unavailable', 
   }
   await expect(collect).toBeDisabled();
   await expect(page.locator('.collect')).toContainText(/599|600/);
+});
+
+for (const scenario of [
+  {status: 'planned', gap: 0, over: 0, unknown: 0, label: '가능'},
+  {status: 'satisfied', gap: 0, over: 0, unknown: 0, label: '충족'},
+  {status: 'insufficient_slots', gap: 120, over: 0, unknown: 0, label: '부족(상한)'},
+  {status: 'insufficient_slots', gap: 120, over: 0, unknown: 120, label: '자료 확인 필요'},
+  {status: 'infeasible_locked_target', gap: 0, over: 60, unknown: 0, label: '고정 충돌'},
+  {status: 'infeasible_mandatory_attendance', gap: 0, over: 60, unknown: 0, label: '필수선 초과'},
+]) {
+  test(`shared plan state ${scenario.label} preserves ledger and target basis`, async ({page}) => {
+    const ledger = scenario.status === 'satisfied' ? 1200 : 600;
+    const eligible = ledger - scenario.unknown;
+    const expected = 1200 - scenario.gap + scenario.over;
+    const planned = expected - eligible;
+    await page.route('**/demo/api/month?**', async route => {
+      const response = await route.fetch();
+      const body = await response.json();
+      body.derived = {...body.derived, targetMinutes: 1200, fixedOtMinutes: 1400, statutoryMaxMinutes: 1500};
+      body.truth = {current: {...body.truth?.current, effectiveRecognizedMinutes: ledger, selectedTargetMinutes: 1200}};
+      body.days = [
+        {date: '2042-03-04', weekday: '화', day_type: 'workday', recognized_minutes: ledger, work_minutes: ledger, office_minutes: eligible, unknown_minutes: scenario.unknown},
+        {date: '2042-03-05', weekday: '수', day_type: 'workday', recognized_minutes: 0, work_minutes: 0},
+      ];
+      body.planner.selectedTargetMinutes = 1200;
+      body.planner.targetOptions = [{key: 'target', label: '선택 목표', minutes: 1200}];
+      body.planner.comparisons = [{key: 'target', label: '선택 목표', targetMinutes: 1200, selected: true, status: scenario.status, gapMinutes: scenario.gap}];
+      body.planner.strategy = {title: '합성 상태 예시', message: '현재 인정과 추가 근무 계획을 합산합니다.'};
+      body.planner.plan = {
+        status: scenario.status, targetMinutes: 1200, recognizedMinutes: eligible,
+        plannedTotalMinutes: planned, remainingMinutes: 1200 - eligible, forecastMinutes: expected,
+        gapMinutes: scenario.gap, overTargetMinutes: scenario.over,
+        days: planned ? [{date: '2042-03-05', weekday: '수', kind: 'normal', window: '06:40–16:00', plannedMinutes: planned, plannedAdditionalMinutes: planned}] : [],
+        accounting: {targetEligibleMinutes: eligible, currentTargetEligibleMinutes: eligible, excludedUnknownMinutes: scenario.unknown, deferredRemoteMinutes: 0},
+      };
+      await route.fulfill({response, body: JSON.stringify(body)});
+    });
+    await page.goto('/demo/?tab=plan&target=1200');
+    const state = page.locator('.plan-feas');
+    await expect(state).toContainText(scenario.label);
+    const hm = (minutes: number) => `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
+    await expect(page.locator('.plan-schedule')).toContainText(`현재 인정 ${hm(ledger)} · 목표 산입 ${hm(eligible)}`);
+    await expect(state).not.toContainText('부족 0:00');
+    await expect(state).not.toContainText('초과 0:00');
+    const action = state.getByRole('button', {name: '목표를 18:00로 변경'});
+    if (scenario.label === '부족(상한)') {
+      await expect(state).toContainText('현재 조건으로 18:00까지 계획 가능 · 목표 20:00보다 2:00 부족');
+      await expect(action).toBeVisible();
+      await expect(page.locator('.switcher__trigger')).toContainText('20:00');
+      await expect(page.locator('.plan-summary')).toContainText('계획 8:00 · 목표 산입 예상 18:00');
+      await page.screenshot({path: 'test-results/plan-capacity-state.png', fullPage: true});
+    } else {
+      await expect(state.getByRole('button')).toHaveCount(0);
+    }
+    if (scenario.unknown) await expect(state).toContainText('미분류 2:00 제외');
+    await page.locator('.sidebar__item', {hasText: '달력'}).click();
+    await expect(page.locator('.plan-feas')).toContainText(scenario.label);
+    await expect(page.locator('.cal-metrics')).toContainText(`현재 인정${hm(ledger)}`);
+    await expect(page.locator('.cal-metrics')).toContainText(`목표 산입${hm(eligible)}`);
+    await page.locator('.sidebar__item', {hasText: '분석'}).click();
+    await expect(page.locator('.plan-feas')).toContainText(scenario.label);
+  });
+}
+
+for (const width of [1440, 390]) {
+  test(`future partial leave hybrid ${width} shows leave additional work and expected`, async ({page}) => {
+    await page.setViewportSize({width, height: 1000});
+    await page.route('**/demo/api/month?**', async route => {
+      const response = await route.fetch();
+      const body = await response.json();
+      Object.assign(body.days.find((day: {date: string}) => day.date === '2042-03-05'), {timeoff_minutes: 240, recognized_minutes: 240, work_minutes: 0});
+      Object.assign(body.planner.plan.days.find((day: {date: string}) => day.date === '2042-03-05'), {plannedMinutes: 540, plannedAdditionalMinutes: 300, timeoffMinutes: 240});
+      await route.fulfill({response, body: JSON.stringify(body)});
+    });
+    await page.goto('/demo/?tab=calendar&selectedDate=2042-03-05');
+    const cell = page.locator('button.cal-cell[data-date="2042-03-05"]:visible');
+    await expect(cell).toHaveClass(/cal-cell--hybrid/);
+    await expect(cell).toContainText('휴가 4:00');
+    await expect(cell).toContainText('추가 근무 +5:00');
+    await expect(cell).toContainText('예상 9:00');
+    await expect(page.locator('.cal-detail .cal-progress')).toContainText('휴가4:00추가 근무+5:00예상 합계9:00');
+    if (width === 390) await expect(page.locator('.cal-week-row', {hasText: '3/5'})).toContainText('휴가 4:00 · 추가 근무 +5:00 · 예상 9:00');
+    await page.screenshot({path: `test-results/calendar-hybrid-${width}.png`, fullPage: true});
+  });
+}
+
+test('date editor resets input and invalidates previews when date or target changes', async ({page}) => {
+  await page.route('**/demo/api/planner/overrides**', async route => {
+    const response = await page.request.get('/demo/api/month?year=2042&month=3');
+    await route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true, preview: await response.json(), previewToken: 'synthetic-preview'})});
+  });
+  await page.goto('/demo/?tab=calendar&selectedDate=2042-03-05');
+  await page.getByRole('button', {name: '긴 날 719'}).click();
+  await page.getByRole('button', {name: '미리보기', exact: true}).click();
+  await expect(page.getByRole('button', {name: '로컬 저장'})).toBeEnabled();
+  await page.locator('button.cal-cell[data-date="2042-03-06"]:visible').click();
+  await expect(page.getByRole('button', {name: '로컬 저장'})).toBeDisabled();
+  await expect(page.getByLabel('시간', {exact: true})).not.toHaveValue('11');
+  await page.getByRole('button', {name: '긴 날 719'}).click();
+  await page.getByRole('radio', {name: /9시간/}).click();
+  await expect(page.getByRole('button', {name: '로컬 저장'})).toBeDisabled();
+  await expect(page.getByLabel('시간', {exact: true})).not.toHaveValue('11');
+});
+
+test('anchored today current eligibility is not the forecast starting balance', async ({page}) => {
+  await page.route('**/demo/api/month?**', async route => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.truth = {current: {...body.truth?.current, effectiveRecognizedMinutes: 551}};
+    Object.assign(body.planner.plan, {recognizedMinutes: 0, accounting: {targetEligibleMinutes: 0, currentTargetEligibleMinutes: 551}});
+    await route.fulfill({response, body: JSON.stringify(body)});
+  });
+  await page.goto('/demo/?tab=plan');
+  await expect(page.locator('.plan-schedule')).toContainText('현재 인정 9:11 · 목표 산입 9:11');
+  await expect(page.locator('.plan-feas')).toContainText('현재 인정 9:11 중 목표 산입 9:11');
+  await page.locator('.sidebar__item', {hasText: '달력'}).click();
+  await expect(page.locator('.cal-metrics')).toContainText('목표 산입9:11');
+});
+
+test('archive calendar has confirmed ledger without plan-only metrics', async ({page}) => {
+  await page.goto('/demo/?year=2042&month=2&tab=calendar');
+  await expect(page.locator('.archive-notice')).toBeVisible();
+  const metrics = page.locator('.cal-metrics');
+  await expect(metrics).toContainText('현재 인정');
+  await expect(metrics.locator(':scope > span')).toHaveCount(2);
+  await expect(metrics).not.toContainText('목표 산입');
+  await expect(metrics).not.toContainText('남은 실제 근무');
+  await expect(page.locator('.cal-card__h .cal-card__sum')).toHaveCount(0);
+});
+
+for (const window of ['09:00~17:00', '09:00–17:00', 'invalid~29:00']) {
+  test(`date editor parses and validates source window ${window}`, async ({page}) => {
+    await page.route('**/demo/api/month?**', async route => {
+      const response = await route.fetch();
+      const body = await response.json();
+      Object.assign(body.planner.plan.days.find((day: {date: string}) => day.date === '2042-03-05'), {window, plannedMinutes: 420});
+      await route.fulfill({response, body: JSON.stringify(body)});
+    });
+    await page.goto('/demo/?tab=calendar&selectedDate=2042-03-05');
+    await page.getByRole('button', {name: '출퇴근·휴게'}).click();
+    await expect(page.getByLabel('출근', {exact: true})).toHaveValue(window.startsWith('invalid') ? '06:40' : '09:00');
+    await expect(page.getByLabel('퇴근', {exact: true})).toHaveValue(window.startsWith('invalid') ? '16:00' : '17:00');
+    await expect(page.getByLabel('휴게 분')).toHaveValue(window.startsWith('invalid') ? '140' : '60');
+    await expect(page.locator('.cal-override__summary').first()).not.toContainText('NaN');
+  });
+}
+
+for (const change of ['date', 'target', 'payload']) {
+  test(`pending preview response is discarded after ${change} changes`, async ({page}) => {
+    const {promise: pending, resolve: release} = Promise.withResolvers<void>();
+    const {promise: received, resolve: started} = Promise.withResolvers<void>();
+    await page.route('**/demo/api/planner/overrides/preview', async route => {
+      const response = await page.request.get('/demo/api/month?year=2042&month=3');
+      const preview = await response.json();
+      preview.planner.plan.forecastMinutes = 1;
+      started();
+      await pending;
+      await route.fulfill({contentType: 'application/json', body: JSON.stringify({ok: true, preview, previewToken: 'stale-preview'})});
+    });
+    await page.goto('/demo/?tab=calendar&selectedDate=2042-03-05');
+    await page.getByRole('button', {name: '미리보기', exact: true}).click();
+    await received;
+    if (change === 'date') await page.locator('button.cal-cell[data-date="2042-03-06"]:visible').click();
+    if (change === 'target') await page.getByRole('radio', {name: /9시간/}).click();
+    if (change === 'payload') {
+      const refreshed = page.waitForResponse(response => response.url().includes('/demo/api/month?'));
+      await page.getByRole('button', {name: '새로 고침', exact: true}).click();
+      await refreshed;
+    }
+    await expect(page.getByRole('button', {name: '미리보기', exact: true})).toBeEnabled();
+    release();
+    // Barrier: the delayed response has been attempted before inspecting state.
+    await page.unrouteAll({behavior: 'wait'});
+    await expect(page.getByRole('button', {name: '로컬 저장'})).toBeDisabled();
+    await expect(page.locator('.cal-metrics')).not.toContainText('목표 산입 예상0:01');
+    await expect(page.getByText('미리보기 완료 · 저장 전까지 Flex에는 기록되지 않습니다.')).toHaveCount(0);
+  });
+}
+
+test('current remote deferral already credited by forecast does not explain capacity gap', async ({page}) => {
+  await page.route('**/demo/api/month?**', async route => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.truth = {current: {...body.truth?.current, effectiveRecognizedMinutes: 600}};
+    Object.assign(body.planner.plan, {
+      status: 'insufficient_slots', targetMinutes: 1200, recognizedMinutes: 480,
+      plannedTotalMinutes: 600, forecastMinutes: 1080, gapMinutes: 120,
+      accounting: {targetEligibleMinutes: 480, currentTargetEligibleMinutes: 420, deferredRemoteMinutes: 0, excludedUnknownMinutes: 0, currentDeferredRemoteMinutes: 180, currentExcludedUnknownMinutes: 0},
+    });
+    await route.fulfill({response, body: JSON.stringify(body)});
+  });
+  await page.goto('/demo/?tab=plan');
+  await expect(page.locator('.plan-feas')).toContainText('부족(상한)');
+  await expect(page.locator('.plan-feas')).toContainText('현재 인정 10:00 중 목표 산입 7:00 · 재택 3:00 보류');
+  await expect(page.getByRole('button', {name: '목표를 18:00로 변경'})).toBeVisible();
 });

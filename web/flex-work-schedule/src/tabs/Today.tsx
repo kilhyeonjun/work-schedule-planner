@@ -3,7 +3,7 @@ import React from 'react';
 import {Card, Guards, Skel} from '../ui';
 import {TargetProgress} from '../TargetProgress';
 import {
-  DayRow, TabProps, dayTypeLabel, elapsedSinceSync, fmt, kindLabel, pad, todayIso, useNow,
+  currentRecognized, DayRow, TabProps, dayTypeLabel, elapsedSinceSync, fmt, kindLabel, pad, todayIso, useNow,
 } from '../lib';
 
 const md = (d?: string) => (d ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}` : '');
@@ -55,7 +55,7 @@ export function TodayTab(props: TabProps) {
   const nextPlan = nextWork ? plan?.days?.find(d => d.date === nextWork.date) : undefined;
 
   const target = plan?.targetMinutes || 0;
-  const recognized = plan?.recognizedMinutes || 0;
+  const recognized = payload ? currentRecognized(payload) : 0;
   const pct = target > 0 ? Math.min(100, (recognized / target) * 100) : 0;
 
   const intervals = todayRow?.intervals || [];
@@ -174,7 +174,7 @@ export function TodayTab(props: TabProps) {
                 <div><div className="today-ledger__k">퇴근</div><div className="mono today-ledger__v">{todayRow?.last_end || '—'}</div></div>
                 <div><div className="today-ledger__k">사무실</div><div className="mono today-ledger__v">{fmt(todayRow?.office_minutes)}</div></div>
                 <div><div className="today-ledger__k">원격</div><div className="mono today-ledger__v">{fmt(todayRow?.remote_minutes)}</div></div>
-                <div><div className="today-ledger__k">추가 근무</div><div className="mono today-ledger__v">{fmt(todayRow?.unknown_minutes)}</div></div>
+                <div><div className="today-ledger__k">미분류 근무</div><div className="mono today-ledger__v">{fmt(todayRow?.unknown_minutes)}</div><small>목표 산입 제외</small></div>
                 <div><div className="today-ledger__k">휴게</div><div className="mono today-ledger__v">{fmt(todayRow?.rest_minutes)}</div></div>
               </div>
               <div className="today-ledger__ints">
