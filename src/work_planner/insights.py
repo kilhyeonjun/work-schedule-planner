@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 import datetime as dt
 import re
 from zoneinfo import ZoneInfo
@@ -9,6 +10,15 @@ _KST = ZoneInfo("Asia/Seoul")
 
 def _ceil_average(minutes: int, days: int) -> int:
     return (minutes + days - 1) // days if days else 0
+
+
+def _duration(minutes: int) -> str:
+    return f"{minutes // 60}:{minutes % 60:02d}"
+
+
+def _month_day(date: str) -> str:
+    parsed = dt.date.fromisoformat(date)
+    return f"{parsed.month}/{parsed.day}"
 
 
 def _target_progress(payload: dict, today: str) -> dict:
@@ -90,15 +100,28 @@ def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
         if date > today and day["day_type"] == "workday"
     )
     guards = []
+    week_starts = {}
+    year, month = payload.get("year", now.year), payload.get("month", now.month)
+    month_start = dt.date(year, month, 1)
+    month_end = dt.date(year, month, calendar.monthrange(year, month)[1])
     for week in plan["summary"]["weekly"]:
         minutes = week.get("projectedActualMinutes")
         if minutes is None:
             minutes = week["actualMinutes"] + week["plannedAdditionalMinutes"]
         limit = week["weeklyMaxMinutes"]
         if minutes >= limit - 240:
+            week_year, week_number = week["key"].split("-W")
+            monday = dt.date.fromisocalendar(int(week_year), int(week_number), 1)
+            start, end = max(monday, month_start), min(monday + dt.timedelta(days=6), month_end)
+            week_starts[week["key"]] = start.isoformat()
+            span = f"{_month_day(start.isoformat())}–{_month_day(end.isoformat())}"
+            label = (
+                f"{span} 주 52시간 {_duration(minutes - limit)} 초과 예상"
+                if minutes > limit else f"{span} 주 52시간까지 {_duration(limit - minutes)} 남음"
+            )
             guards.append({
                 "key": "weekly_max", "level": "breach" if minutes > limit else "risk",
-                "weekKey": week["key"], "label": "주간 실근무 상한",
+                "weekKey": week["key"], "label": label,
                 "minutes": minutes, "limitMinutes": limit,
             })
 
@@ -113,7 +136,8 @@ def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
             if minutes > 960:
                 guards.append({
                     "key": "friday_cap", "level": "breach", "date": date,
-                    "label": "금요일 16시 퇴근 상한", "minutes": minutes, "limitMinutes": 960,
+                    "label": f"{_month_day(date)}(금) {minutes // 60:02d}:{minutes % 60:02d} 퇴근 계획 · 16:00 상한 초과",
+                    "minutes": minutes, "limitMinutes": 960,
                 })
 
     for date, day in sorted(ledger.items()):
@@ -124,9 +148,14 @@ def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
         if day["rest_minutes"] < required:
             guards.append({
                 "key": "rest_break", "level": "risk" if date == today else "breach",
-                "date": date, "label": "실근무에 따른 필수 휴게",
+                "date": date,
+                "label": f"{_month_day(date)} 휴게 {_duration(day['rest_minutes'])} · 필요 {_duration(required)}",
                 "minutes": day["rest_minutes"], "limitMinutes": required,
             })
+    guards.sort(key=lambda guard: (
+        guard["level"] != "breach",
+        guard.get("date") or week_starts[guard["weekKey"]],
+    ))
 
     action = plan.get("todayAction") or {}
     remaining = action.get("remainingTodayMinutes", 0)

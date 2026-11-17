@@ -51,7 +51,10 @@ def test_weekly_guard_threshold_and_fallback(minutes, level, projected):
     guards = month_insights(source, now=NOW)["guards"]
     assert guards == ([] if level is None else [{
         "key": "weekly_max", "level": level, "weekKey": "2042-W10",
-        "label": "주간 실근무 상한", "minutes": minutes, "limitMinutes": 2400,
+        "label": {2160: "3/3–3/9 주 52시간까지 4:00 남음",
+                  2400: "3/3–3/9 주 52시간까지 0:00 남음",
+                  2401: "3/3–3/9 주 52시간 0:01 초과 예상"}.get(minutes),
+        "minutes": minutes, "limitMinutes": 2400,
     }])
 
 
@@ -63,7 +66,7 @@ def test_future_friday_end_boundary(end, breach):
     assert len(guards) == int(breach)
     if breach:
         assert guards[0] == {"key": "friday_cap", "level": "breach", "date": "2042-03-07",
-                             "label": "금요일 16시 퇴근 상한", "minutes": 961, "limitMinutes": 960}
+                             "label": "3/7(금) 16:01 퇴근 계획 · 16:00 상한 초과", "minutes": 961, "limitMinutes": 960}
 
 
 @pytest.mark.parametrize("date,additional", [("2042-02-28", 400), ("2042-03-07", 0), ("2042-03-05", 400)])
@@ -86,7 +89,8 @@ def test_rest_thresholds_past_and_ongoing_today(worked, rest, required, index, l
     guards = month_insights(source, now=NOW)["guards"]
     assert guards == ([] if required is None else [{
         "key": "rest_break", "level": level, "date": source["days"][index]["date"],
-        "label": "실근무에 따른 필수 휴게", "minutes": rest, "limitMinutes": required,
+        "label": f"3/{3 + index} 휴게 {rest // 60}:{rest % 60:02d} · 필요 {required // 60}:{required % 60:02d}",
+        "minutes": rest, "limitMinutes": required,
     }])
 
 
@@ -371,3 +375,36 @@ def test_present_options_do_not_fall_back_to_selected_derived_targets():
     targets = month_insights(source, now=PROGRESS_NOW)["targets"]
     assert [target["key"] for target in targets] == ["base", "nine_hour"]
     assert [target["minutes"] for target in targets] == [7200, 11340]
+
+
+@pytest.mark.parametrize("year,month,week_key,label", [
+    (2042, 3, "2042-W09", "3/1–3/2 주 52시간까지 1:40 남음"),
+    (2042, 3, "2042-W14", "3/31–3/31 주 52시간까지 1:40 남음"),
+    (2026, 1, "2026-W01", "1/1–1/4 주 52시간까지 1:40 남음"),
+])
+def test_week_guard_label_clips_iso_week_to_payload_month(year, month, week_key, label):
+    source = payload()
+    source.update(year=year, month=month)
+    source["planner"]["plan"]["summary"]["weekly"] = [{
+        "key": week_key, "projectedActualMinutes": 3020, "weeklyMaxMinutes": 3120,
+    }]
+    assert month_insights(source, now=NOW)["guards"][0]["label"] == label
+
+
+def test_guard_labels_are_self_contained_and_severity_then_date_sorted():
+    source = payload()
+    source["planner"]["plan"]["summary"]["weekly"] = [
+        {"key": "2042-W11", "projectedActualMinutes": 3020, "weeklyMaxMinutes": 3120},
+        {"key": "2042-W10", "projectedActualMinutes": 3250, "weeklyMaxMinutes": 3120},
+    ]
+    source["days"][0]["rest_minutes"] = 30
+    source["days"][1]["rest_minutes"] = 10
+    source["planner"]["plan"]["days"][-1]["window"] = "09:00–17:05"
+    guards = month_insights(source, now=NOW)["guards"]
+    assert [(guard["level"], guard["label"]) for guard in guards] == [
+        ("breach", "3/3–3/9 주 52시간 2:10 초과 예상"),
+        ("breach", "3/3 휴게 0:30 · 필요 1:00"),
+        ("breach", "3/7(금) 17:05 퇴근 계획 · 16:00 상한 초과"),
+        ("risk", "3/4 휴게 0:10 · 필요 0:30"),
+        ("risk", "3/10–3/16 주 52시간까지 1:40 남음"),
+    ]
