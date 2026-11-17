@@ -24,9 +24,9 @@ def dispatch(request):
         return month_payload(**args)
     if op == "archive_payload":
         return archive_payload()
-    if op == "route":
+    if op in {"route", "route_text"}:
         status, headers, body = route(**args)
-        if headers["Content-Type"].startswith("application/json"):
+        if op == "route" and headers["Content-Type"].startswith("application/json"):
             body = json.loads(body)
         return [status, headers, body]
     if op == "explain_result":

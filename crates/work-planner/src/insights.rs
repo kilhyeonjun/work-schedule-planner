@@ -472,8 +472,10 @@ pub fn month_insights(
     if let Some(c) = constraints {
         forecast["basis"] = c.get("basis").cloned().unwrap_or(json!("target_eligible"));
     }
-    let mut result = target_progress(payload, &today);
-    result["asOf"] = json!(now.format("%Y-%m-%dT%H:%M").to_string());
+    let mut result = json!({"asOf": now.format("%Y-%m-%dT%H:%M").to_string()});
+    if let Value::Object(progress) = target_progress(payload, &today) {
+        result.as_object_mut().unwrap().extend(progress);
+    }
     result["guards"] = json!(guards.into_iter().map(|(_, g)| g).collect::<Vec<_>>());
     result["leaveNow"] = leave;
     result["forecast"] = forecast;

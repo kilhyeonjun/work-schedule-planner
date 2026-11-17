@@ -11,7 +11,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from work_planner_rust import call
+from work_planner_rust import call, route_response
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = sorted((ROOT / "fixtures" / "scenarios").glob("*.input.json"))
@@ -30,7 +30,7 @@ def oracle():
         process.stdin.flush()
         expected = json.loads(process.stdout.readline())
         if expected["ok"]:
-            actual = call(op, **args)
+            actual = list(route_response(**args)) if op == "route_text" else call(op, **args)
             assert actual == expected["result"]
             return actual
         with pytest.raises((ValueError, TypeError, AssertionError)) as raised:
@@ -136,9 +136,12 @@ def test_archive_index_matches_python(oracle):
     ("GET", "/demo/api/archive", ""), ("GET", "/demo/api/month", ""),
     ("GET", "/demo/api/month", "year=x&month=99&target=-7"),
     ("GET", "/demo/api/month", "target=999999&normal=600&long=650&short=300"),
+    ("GET", "/demo/api/month", "target=999999999999999999999999999&normal=٥٠٠&long=7_19&short=+285"),
+    ("GET", "/demo/api/month", "target=1__0&normal=_600&long=600_&short="),
 ])
 def test_routes_match_python(oracle, method, path, query):
     oracle("route", method=method, path=path, query_string=query)
+    oracle("route_text", method=method, path=path, query_string=query)
 
 
 @pytest.mark.parametrize("status,gap", [("planned", 0), ("satisfied", 0), ("insufficient_slots", 42), ("over_target", 0)])

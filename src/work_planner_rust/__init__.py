@@ -53,6 +53,14 @@ def call(op: str, **args):
         return response["result"]
 
 
+def route_response(method, path, query_string):
+    """Keep Python's public route tuple and JSON text serialization."""
+    status, headers, body = call("route", method=method, path=path, query_string=query_string)
+    if headers["Content-Type"].startswith("application/json"):
+        body = json.dumps(body, ensure_ascii=False)
+    return status, headers, body
+
+
 def _day(day):
     return {
         "date": day.date, "dayType": day.day_type, "workedMinutes": day.worked_minutes,
@@ -120,10 +128,7 @@ def install():
         return call("nine_hour_target_minutes", year=year, month=month)
 
     def route(method, path, query_string):
-        status, headers, body = call("route", method=method, path=path, query_string=query_string)
-        if headers["Content-Type"].startswith("application/json"):
-            body = json.dumps(body, ensure_ascii=False)
-        return status, headers, body
+        return route_response(method, path, query_string)
 
     def replace(module, name, function):
         original = getattr(module, name)

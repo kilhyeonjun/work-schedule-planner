@@ -55,6 +55,7 @@ Parity tests use an independent Python process and the Rust CLI: all five
 scenario fixtures, 100 deterministic Hypothesis planner/bounds examples, 100
 Hypothesis insight examples, and demo/route/explanation cases. JSON object order
 is immaterial; array order and floating-point values must agree exactly. Route
-JSON bodies are compared after decoding, rather than by whitespace/key order.
+JSON bodies additionally match Python's text serialization byte for byte;
+Serde's insertion-order feature retains the Python dictionary order for this API.
 The public-boundary scanner also covers `crates/`; no scanner allowlists or
 frontend source manifests are changed.
