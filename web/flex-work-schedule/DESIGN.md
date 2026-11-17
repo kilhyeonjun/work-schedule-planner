@@ -34,6 +34,8 @@ The shared strategy panel is the only settings implementation: presets, exact cu
 
 `lib.ts` owns the shared plan-state mapping: 가능 / 충족 / 부족(상한) / 자료 확인 필요 / 고정 충돌 / 필수선 초과. Excluded unknown and deferred remote recognition that explain a shortfall lead with classification review, not a target cut. Capacity shortfalls name the reachable total, target and missing amount once; only these offer “목표를 …로 변경”. Zero shortfall/excess rows are hidden. “현재 인정” always uses current ledger truth (insights forecast recognition as fallback). Current “목표 산입” uses `accounting.currentTargetEligibleMinutes`: completed days plus today's recorded recognition, with current excluded/held amounts explained, never future leave. If unavailable, omit that current figure rather than substitute the forecast starting balance. `accounting.targetEligibleMinutes` and `plan.recognizedMinutes` are forecast starting balances only. Unknown work is “미분류 근무 · 목표 산입 제외”.
 
+Current-basis exclusions explain the current display; shortfall classification uses exclusions actually absent from the forecast. Remote credit already unlocked by future leave must not be blamed for a capacity gap.
+
 Calendar renders future partial leave plus planned additional work as a hybrid on desktop, phone mini-cells/list and detail: leave / additional work / expected recognition. Archive calendars without a plan show only confirmed ledger metrics, not zero forecasts or remaining-work metrics. Overrides say “날짜 고정” with the actual window, never a fixed assumed end time. The editor accepts validated `HH:MM–HH:MM` and `HH:MM~HH:MM` source windows. Date, target, settings and source-payload changes reset the editor and invalidate preview tokens, including delayed pending responses.
 
 

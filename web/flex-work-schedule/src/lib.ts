@@ -142,6 +142,7 @@ export function planState(plan: Plan, payload?: MonthPayload) {
   const over = plan.overTargetMinutes || 0;
   const unknown = plan.accounting?.currentExcludedUnknownMinutes ?? plan.accounting?.excludedUnknownMinutes ?? 0;
   const remote = plan.accounting?.currentDeferredRemoteMinutes ?? plan.accounting?.deferredRemoteMinutes ?? 0;
+  const forecastExcluded = (plan.accounting?.excludedUnknownMinutes || 0) + (plan.accounting?.deferredRemoteMinutes || 0);
   const eligible = plan.accounting?.currentTargetEligibleMinutes;
   const possible = plan.forecastMinutes ?? ((plan.recognizedMinutes || 0) + (plan.plannedTotalMinutes || 0));
   const basis = [
@@ -152,7 +153,7 @@ export function planState(plan: Plan, payload?: MonthPayload) {
   const hint = `제한 확인: 남은 근무일 · 주 상한 · 금요일 · 날짜 고정${unknown + remote > 0 ? ` · ${basis}` : ''}`;
   if (plan.status === 'infeasible_locked_target' || (plan.conflictReason && plan.status !== 'infeasible_mandatory_attendance')) return {label: '고정 충돌', warning: true, message: plan.conflictReason || (over > 0 ? `고정된 일정 때문에 목표보다 ${fmt(over)} 초과` : '고정된 일정의 조건을 확인하세요.'), hint: `날짜 고정과 오늘의 최소 근무선을 확인하세요. · ${basis}`};
   if (plan.status === 'infeasible_mandatory_attendance' || over > 0) return {label: '필수선 초과', warning: true, message: plan.conflictReason || (over > 0 ? `필수 근무선 때문에 목표보다 ${fmt(over)} 초과` : '필수 근무선의 조건을 확인하세요.'), hint: `필수 출근 최소선을 확인하세요. · ${basis}`};
-  if (gap > 0 && unknown + remote >= gap) return {label: '자료 확인 필요', warning: true, message: `근무 분류 확인 필요 · ${basis}`, hint: '원본 근무 분류를 확인하세요. 제외·보류 시간은 목표 산입에 포함되지 않습니다.'};
+  if (gap > 0 && forecastExcluded >= gap) return {label: '자료 확인 필요', warning: true, message: `근무 분류 확인 필요 · ${basis}`, hint: '원본 근무 분류를 확인하세요. 제외·보류 시간은 목표 산입에 포함되지 않습니다.'};
   if (gap > 0) return {label: '부족(상한)', warning: true, message: `현재 조건으로 ${fmt(possible)}까지 계획 가능 · 목표 ${fmt(plan.targetMinutes)}보다 ${fmt(gap)} 부족`, hint, actionTarget: possible};
   return {label: plan.status === 'satisfied' ? '충족' : '가능', warning: false, message: basis, hint: unknown + remote > 0 ? '제외·보류 시간은 목표 산입에 포함되지 않습니다.' : ''};
 }

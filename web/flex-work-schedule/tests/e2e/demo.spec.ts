@@ -654,3 +654,21 @@ for (const change of ['date', 'target', 'payload']) {
     await expect(page.getByText('미리보기 완료 · 저장 전까지 Flex에는 기록되지 않습니다.')).toHaveCount(0);
   });
 }
+
+test('current remote deferral already credited by forecast does not explain capacity gap', async ({page}) => {
+  await page.route('**/demo/api/month?**', async route => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.truth = {current: {...body.truth?.current, effectiveRecognizedMinutes: 600}};
+    Object.assign(body.planner.plan, {
+      status: 'insufficient_slots', targetMinutes: 1200, recognizedMinutes: 480,
+      plannedTotalMinutes: 600, forecastMinutes: 1080, gapMinutes: 120,
+      accounting: {targetEligibleMinutes: 480, currentTargetEligibleMinutes: 420, deferredRemoteMinutes: 0, excludedUnknownMinutes: 0, currentDeferredRemoteMinutes: 180, currentExcludedUnknownMinutes: 0},
+    });
+    await route.fulfill({response, body: JSON.stringify(body)});
+  });
+  await page.goto('/demo/?tab=plan');
+  await expect(page.locator('.plan-feas')).toContainText('부족(상한)');
+  await expect(page.locator('.plan-feas')).toContainText('현재 인정 10:00 중 목표 산입 7:00 · 재택 3:00 보류');
+  await expect(page.getByRole('button', {name: '목표를 18:00로 변경'})).toBeVisible();
+});
