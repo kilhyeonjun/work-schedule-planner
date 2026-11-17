@@ -460,6 +460,16 @@ def test_anchored_today_expected_counts_recorded_today_once_in_recognized_units(
     }
 
 
+def test_expected_includes_confirmed_future_leave_with_and_without_plan_rows():
+    source = payload()
+    # Partial leave on a planned day: plannedAdditionalMinutes excludes the leave.
+    source["days"][2]["timeoff_minutes"] = 240
+    # Full-day leave has no plan row at all.
+    source["days"].append({"date": "2042-03-06", "day_type": "workday", "work_minutes": 0,
+                           "timeoff_minutes": 480, "rest_minutes": 0})
+    assert month_insights(source, now=NOW)["forecast"]["expectedMinutes"] == 720 + 240 + 480 + 1000
+
+
 def test_completed_week_breach_without_plan_rows_and_outside_month_is_excluded():
     source = payload()
     source.update(year=2042, month=3)

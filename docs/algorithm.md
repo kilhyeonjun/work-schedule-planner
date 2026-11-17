@@ -41,9 +41,11 @@ cap contributes its overflow to the shortfall; no remaining workdays means all
 of today's remainder is a shortfall. Displayed averages round up to whole minutes.
 This is arithmetic, not a new constrained plan or a guarantee about weekly caps.
 Forecast `recognizedMinutes` is completed ledger recognition (dates strictly before
-today) plus today's recorded recognition. Expected minutes add the plan's still
-unrecorded work (`plannedAdditionalMinutes` of plan rows dated today or later) to
-that current recognition. `plan.forecastMinutes` is not used: live plans count
+today) plus today's recorded recognition. Expected minutes add confirmed future
+recognition already on the ledger (paid leave after today, including full-day
+leave without a plan row) and the plan's still unrecorded work
+(`plannedAdditionalMinutes` of plan rows dated today or later) to that current
+recognition. `plan.forecastMinutes` is not used: live plans count
 target-eligible minutes, which exclude deferred remote and unclassified work, so
 that total is not comparable with recognized minutes. Minimum and maximum keep all recorded
 time (including holiday work and time beyond a day cap) and add short-day/long-day
