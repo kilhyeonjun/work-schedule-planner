@@ -319,6 +319,11 @@ for (const viewport of [{width: 1440, height: 1000}, {width: 390, height: 844}])
           await comparison.click();
           await expect(comparison).toHaveAttribute('aria-expanded', 'true');
           for (const alternative of await page.locator('.plan-strat').all()) await expect(alternative).toBeVisible();
+          const cards = await page.locator('.plan-strat').evaluateAll(nodes => nodes.map(node => {
+            const rect = node.getBoundingClientRect(); return {x: rect.x, y: rect.y};
+          }));
+          expect(new Set(cards.map(card => card.y)).size).toBe(4);
+          expect(new Set(cards.map(card => card.x)).size).toBe(1);
           await comparison.click();
           await expect(comparison).toHaveAttribute('aria-expanded', 'false');
         } else {
