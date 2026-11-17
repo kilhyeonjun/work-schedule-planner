@@ -11,7 +11,10 @@ export function OverridePreview({day, target, settings, onClose, onSave}: {day: 
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const controller = useRef<AbortController | null>(null);
-  useEffect(() => () => controller.current?.abort(), []);
+  useEffect(() => {
+    controller.current?.abort(); setMinutes(day.plannedMinutes); setResult(undefined); setMessage(''); setBusy(false);
+    return () => controller.current?.abort();
+  }, [day, target, settings.normalDayMinutes, settings.longDayMinutes, settings.shortDayMinutes]);
   const request = async (action: 'preview' | 'save', value = minutes) => {
     controller.current?.abort();
     const pending = new AbortController();
@@ -27,6 +30,7 @@ export function OverridePreview({day, target, settings, onClose, onSave}: {day: 
       });
       if (response.status === 405 && window.location.pathname.startsWith('/demo')) throw new Error('데모에서는 미리보기·로컬 저장을 사용할 수 없습니다. 실제 앱에서 이용해 주세요.');
       const body: Result = await response.json();
+      if (pending.signal.aborted) return;
       if (!response.ok || !body.ok || !body.preview) throw new Error(body.error || `HTTP ${response.status}`);
       setResult(body);
       if (action === 'save') { onSave(body.preview); setResult(undefined); setMessage('로컬 계획을 저장했습니다. Flex에는 기록되지 않습니다.'); }
@@ -39,13 +43,13 @@ export function OverridePreview({day, target, settings, onClose, onSave}: {day: 
       <div className="row row--between"><h2>{day.date} · 이렇게 바꾸면?</h2><Button variant="ghost" size="sm" onPress={onClose}>닫기</Button></div>
       <p className="muted">이 날짜를 고정했을 때의 월 영향 · Flex 실근무·휴가 기록은 변경하지 않습니다.</p>
       <div className="what-if__choices">
-        {[[0, '휴가 0'], [settings.shortDayMinutes, '단축'], [settings.normalDayMinutes, '보통'], [settings.longDayMinutes, '긴 날']].map(([value, label]) =>
-          <Button key={String(label)} variant={minutes === value ? 'primary' : 'secondary'} onPress={() => request('preview', Number(value))}>{label} · {fmt(Number(value))}</Button>)}
+        {[[0, '근무 배정 없음'], [settings.shortDayMinutes, '단축'], [settings.normalDayMinutes, '보통'], [settings.longDayMinutes, '긴 날']].map(([value, label]) =>
+          <Button key={String(label)} variant={minutes === value ? 'primary' : 'secondary'} onPress={() => request('preview', Number(value))}>{label} {fmt(Number(value))}</Button>)}
       </div>
       {busy && <p role="status">미리보기 업데이트 중</p>}
       {result?.preview && <div className="what-if__impact" aria-live="polite">
         <b>월 영향</b><p>계획 합계 {fmt(result.plannedTotalMinutes ?? result.preview.planner?.plan?.plannedTotalMinutes)} · 예상 인정 {fmt(result.preview.planner?.plan?.forecastMinutes ?? ((result.preview.planner?.plan?.recognizedMinutes || 0) + (result.preview.planner?.plan?.plannedTotalMinutes || 0)))}</p>
-        <p>부족 {fmt(result.gapMinutes ?? result.preview.planner?.plan?.gapMinutes)} · 초과 {fmt(result.overTargetMinutes ?? result.preview.planner?.plan?.overTargetMinutes)}{result.reason ? ` · ${result.reason}` : ''}</p>
+        <p>{(result.gapMinutes ?? result.preview.planner?.plan?.gapMinutes ?? 0) > 0 && `부족 ${fmt(result.gapMinutes ?? result.preview.planner?.plan?.gapMinutes)}`}{(result.overTargetMinutes ?? result.preview.planner?.plan?.overTargetMinutes ?? 0) > 0 && ` 초과 ${fmt(result.overTargetMinutes ?? result.preview.planner?.plan?.overTargetMinutes)}`}{result.reason ? ` · ${result.reason}` : ''}</p>
         {result.adjustments?.map(item => <p key={item.date}>{item.date} · {fmt(item.beforeMinutes)} → {fmt(item.afterMinutes)}</p>)}
       </div>}
       {message && <p role="status">{message}</p>}

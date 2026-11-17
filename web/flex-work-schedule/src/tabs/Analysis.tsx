@@ -1,14 +1,9 @@
 import './analysis.css';
 import React from 'react';
-import {Comparison, fmt, krw, pad, TabProps, todayIso} from '../lib';
+import {currentRecognized, fmt, krw, pad, planState, TabProps, todayIso} from '../lib';
 import {Card, Skel} from '../ui';
 import {TargetProgress} from '../TargetProgress';
 
-const isWarnRow = (c: Comparison) => {
-  const f = c.feasibility;
-  return (c.gapMinutes || 0) > 0 || (f?.gapMinutes || 0) > 0 || f?.requiredLongDayFeasible === false
-    || (!!f?.status && f.status !== 'planned' && f.status !== 'ok');
-};
 
 export function AnalysisTab({payload, loading, selected, setTarget, settings, year, month}: TabProps) {
   if (loading && !payload) {
@@ -37,7 +32,7 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
   const lastDay = new Date(year, month, 0).getDate();
 
   const truth = payload.truth?.current;
-  const recognized = truth?.effectiveRecognizedMinutes ?? d.recognizedMinutes ?? 0;
+  const recognized = currentRecognized(payload);
   const selTarget = truth?.selectedTargetMinutes || selected || d.targetMinutes || 0;
   // stale payload의 c.selected는 무시 — 사용자 선택 target(selTarget)만 신뢰
   const selComp = comparisons.find(c => c.targetMinutes === selTarget);
@@ -103,6 +98,13 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
 
   return (
     <div className={`an-grid ${payload && loading ? 'is-refreshing' : ''}`}>
+      {plan && (() => {
+        const state = planState(plan, payload);
+        return <div className={`plan-feas ${state.warning ? 'plan-feas--warn' : ''}`} role={state.warning ? 'alert' : 'status'}>
+          <b>{state.label}</b><span>{state.message}</span>{state.hint && <span>{state.hint}</span>}
+          {state.actionTarget != null && <button onClick={() => setTarget(state.actionTarget!)}>목표를 {fmt(state.actionTarget)}로 변경</button>}
+        </div>;
+      })()}
       <div className="an-col">
         <TargetProgress insights={planner?.insights} detailed />
 
@@ -201,7 +203,8 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
                 <div className="an-cmp">
                   {comparisons.map(c => {
                     const isSel = c.targetMinutes === selTarget;
-                    const warn = isWarnRow(c);
+                    const state = planState({...c, status: c.status || c.feasibility?.status, accounting: plan?.accounting}, payload);
+                    const warn = state.warning;
                     const pay = c.projectedExtraPayAfterTaxKrw || 0;
                     const longDays = c.summary?.longDays || 0;
                     return (
@@ -224,7 +227,7 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
                         </span>
                         <span className="an-effort">{c.effortLabel || '—'}</span>
                         <span className="an-meta mono">
-                          남은 {fmt(c.remainingMinutes)} · <span className={warn ? 'an-warn-txt' : ''}>격차 {fmt(c.gapMinutes)}</span>
+                          남은 {fmt(c.remainingMinutes)} · <span className={warn ? 'an-warn-txt' : ''}>{state.label}{(c.gapMinutes || 0) > 0 ? ` · 부족 ${fmt(c.gapMinutes)}` : ''}</span>
                           {' '}· 평균 {fmt(c.summary?.averageDailyMinutes)}/일
                         </span>
                       </button>
