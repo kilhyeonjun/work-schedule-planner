@@ -163,7 +163,7 @@ def test_forecast_uses_slot_capacity_not_selected_target_feasibility(maximum):
     if maximum is not None:
         source["planner"]["plan"]["feasibility"] = {"possibleTargetMinutes": maximum}
     assert month_insights(source, now=NOW)["forecast"] == {
-        "recognizedMinutes": 720, "expectedMinutes": 1480,
+        "recognizedMinutes": 720, "expectedMinutes": 1720,
         "minMinutes": 1335, "maxMinutes": 2280,
     }
 
@@ -427,8 +427,8 @@ def test_guard_labels_are_self_contained_and_severity_then_date_sorted():
     ]
 
 
-@pytest.mark.parametrize("canonical", [True, False])
-def test_anchored_today_forecast_does_not_double_count_recorded_today(canonical):
+@pytest.mark.parametrize("eligibility_basis", [True, False])
+def test_anchored_today_expected_counts_recorded_today_once_in_recognized_units(eligibility_basis):
     source = payload()
     source.update(year=2026, month=7)
     source["derived"]["recognizedMinutes"] = 13612
@@ -447,9 +447,10 @@ def test_anchored_today_forecast_does_not_double_count_recorded_today(canonical)
         {"date": "2026-07-31", "plannedMinutes": 470, "plannedAdditionalMinutes": 470, "window": "07:40–16:00"},
     ]
     plan["plannedTotalMinutes"] = 933
-    if canonical:
-        plan["forecastMinutes"] = 14112
-        plan["plannedTotalMinutes"] = 1000  # Canonical forecast takes precedence.
+    if eligibility_basis:
+        # Live plans total target-eligible minutes; excluded remote/unknown work makes
+        # these far below recognition, so they must not drive the recognized forecast.
+        plan["recognizedMinutes"], plan["forecastMinutes"] = 169, 669
     forecast = month_insights(
         source, now=dt.datetime(2026, 7, 30, 15, tzinfo=NOW.tzinfo),
     )["forecast"]
@@ -457,6 +458,16 @@ def test_anchored_today_forecast_does_not_double_count_recorded_today(canonical)
         "recognizedMinutes": 13612, "expectedMinutes": 14112,
         "minMinutes": 13897, "maxMinutes": 14379,
     }
+
+
+def test_expected_includes_confirmed_future_leave_with_and_without_plan_rows():
+    source = payload()
+    # Partial leave on a planned day: plannedAdditionalMinutes excludes the leave.
+    source["days"][2]["timeoff_minutes"] = 240
+    # Full-day leave has no plan row at all.
+    source["days"].append({"date": "2042-03-06", "day_type": "workday", "work_minutes": 0,
+                           "timeoff_minutes": 480, "rest_minutes": 0})
+    assert month_insights(source, now=NOW)["forecast"]["expectedMinutes"] == 720 + 240 + 480 + 1000
 
 
 def test_completed_week_breach_without_plan_rows_and_outside_month_is_excluded():

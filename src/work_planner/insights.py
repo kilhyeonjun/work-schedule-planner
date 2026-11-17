@@ -196,9 +196,15 @@ def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
         today_capacity = max(0, day_minutes - today_recognized) if today_is_workday else 0
         return current + today_capacity + len(future) * day_minutes
 
-    expected = plan.get("forecastMinutes")
-    if expected is None:
-        expected = recognized + plan["plannedTotalMinutes"]
+    # Same basis as min/max: recorded recognition, confirmed future recognition (paid leave
+    # already on the ledger, including full-day leave without a plan row), and the plan's
+    # still-unrecorded work. plan.forecastMinutes is in target-eligibility units
+    # (remote/unknown work may be excluded there), so it is not comparable.
+    expected = (
+        current
+        + sum(_recognized_minutes(day) for date, day in ledger.items() if date > today)
+        + sum(day.get("plannedAdditionalMinutes", 0) for date, day in planned.items() if date >= today)
+    )
     return {
         "asOf": now.isoformat(timespec="minutes")[:16],
         **_target_progress(payload, today),
