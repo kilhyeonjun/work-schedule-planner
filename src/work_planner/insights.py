@@ -92,8 +92,9 @@ def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
         }
 
     recognized = payload["derived"]["recognizedMinutes"]
-    feasibility = plan.get("feasibility") or planner.get("feasibility") or payload.get("feasibility") or {}
-    maximum = feasibility.get("possibleTargetMinutes")
+    today_worked = action.get("workedMinutes", ledger.get(today, {}).get("work_minutes", 0))
+    today_short = max(0, settings["shortDayMinutes"] - today_worked) if leave_now is not None else 0
+    today_long = max(0, settings["longDayMinutes"] - today_worked) if leave_now is not None else 0
     return {
         "asOf": now.isoformat(timespec="minutes")[:16],
         "guards": guards,
@@ -101,7 +102,7 @@ def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
         "forecast": {
             "recognizedMinutes": recognized,
             "expectedMinutes": recognized + plan["plannedTotalMinutes"],
-            "minMinutes": recognized + len(future) * settings["shortDayMinutes"],
-            "maxMinutes": maximum if maximum is not None else recognized + len(future) * settings["longDayMinutes"],
+            "minMinutes": recognized + len(future) * settings["shortDayMinutes"] + today_short,
+            "maxMinutes": recognized + len(future) * settings["longDayMinutes"] + today_long,
         },
     }

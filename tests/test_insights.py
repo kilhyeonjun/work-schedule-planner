@@ -148,13 +148,13 @@ def test_leave_now_absent_on_off_day_or_without_remaining(off):
 
 
 @pytest.mark.parametrize("maximum", [None, 0, 1800])
-def test_forecast_feasibility_and_fallback(maximum):
+def test_forecast_uses_slot_capacity_not_selected_target_feasibility(maximum):
     source = payload()
     if maximum is not None:
         source["planner"]["plan"]["feasibility"] = {"possibleTargetMinutes": maximum}
     assert month_insights(source, now=NOW)["forecast"] == {
         "recognizedMinutes": 720, "expectedMinutes": 1720,
-        "minMinutes": 1290, "maxMinutes": 1920 if maximum is None else maximum,
+        "minMinutes": 1335, "maxMinutes": 2280,
     }
 
 
@@ -162,7 +162,26 @@ def test_forecast_excludes_holidays_and_includes_unplanned_workdays():
     source = payload()
     source["days"][2]["day_type"] = "holiday"
     source["planner"]["plan"]["days"] = source["planner"]["plan"]["days"][:1]
-    assert month_insights(source, now=NOW)["forecast"]["minMinutes"] == 1005
+    assert month_insights(source, now=NOW)["forecast"]["minMinutes"] == 1050
+
+
+@pytest.mark.parametrize("worked,remaining,day_type,minimum,maximum", [
+    (240, 0, "workday", 1290, 1920),
+    (240, 200, "holiday", 1290, 1920),
+    (285, 200, "workday", 1290, 2235),
+    (650, 200, "workday", 1290, 1920),
+])
+def test_forecast_today_slot_uses_nonnegative_short_and_long_remainders(
+    worked, remaining, day_type, minimum, maximum,
+):
+    source = payload()
+    source["days"][1]["day_type"] = day_type
+    source["planner"]["plan"]["todayAction"].update(
+        workedMinutes=worked, remainingTodayMinutes=remaining,
+    )
+    forecast = month_insights(source, now=NOW)["forecast"]
+    assert forecast["minMinutes"] == minimum
+    assert forecast["maxMinutes"] == maximum
 
 
 @pytest.mark.parametrize("planner", [None, {}, {"plan": None}])

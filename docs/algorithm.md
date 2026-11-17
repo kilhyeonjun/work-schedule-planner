@@ -37,6 +37,9 @@ indivisible minutes in ISO-date order. A day exceeding the configured long-day
 cap contributes its overflow to the shortfall; no remaining workdays means all
 of today's remainder is a shortfall. Displayed averages round up to whole minutes.
 This is arithmetic, not a new constrained plan or a guarantee about weekly caps.
-Forecast expected minutes add planned work to recognized minutes; the minimum
-uses future workdays at the short-day setting, and the maximum uses feasibility's
-possible target, falling back to future workdays at the long-day setting.
+Forecast expected minutes add planned work to recognized minutes. Minimum and
+maximum instead add the capacity of future workdays at the short-day and long-day
+settings, respectively. If today is a workday with remaining planned work, each
+bound also includes today's nonnegative remainder at its corresponding setting
+after subtracting already worked minutes. The selected target's feasibility
+value is not a capacity bound and is never used for the forecast range.
