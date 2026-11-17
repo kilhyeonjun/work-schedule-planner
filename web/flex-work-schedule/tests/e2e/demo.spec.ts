@@ -13,7 +13,7 @@ test.beforeEach(async ({page}, testInfo) => {
     if (response.status() < 400) return;
     if (testInfo.title.includes('month fetch failure') && response.status() === 500) return;
     if (testInfo.title.includes('demo explains unavailable') && response.status() === 405) return;
-    if (testInfo.title.includes('collection request') && [429, 503].includes(response.status())) return;
+    if (testInfo.title.includes('collection request') && [403, 429, 503].includes(response.status())) return;
     errors.push(`${response.status()} ${response.url()}`);
   });
   page.on('request', request => {
@@ -275,11 +275,55 @@ for (const viewport of [{width: 1440, height: 1000}, {width: 390, height: 844}])
     await expect(progress).toContainText(/속도 \d+:\d{2}\/일 · 근무일 \d+\/\d+/);
     await expect(progress.locator('.target-progress__bar i')).toHaveCount(4);
     await expect(page.getByRole('radiogroup', {name: '목표 선택'}).getByRole('radio')).toHaveCount(4);
+    const groups = [page.getByRole('radiogroup', {name: '목표 선택'})];
+    if (viewport.width >= 1024) groups.push(page.getByRole('radiogroup', {name: '테마'}));
+    for (const group of groups) {
+      const boxes = await group.getByRole('radio').evaluateAll(nodes => nodes.map(node => {
+        const rect = node.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        return {x: rect.x, right: rect.right, height: rect.height, paddingLeft: parseFloat(style.paddingLeft), paddingRight: parseFloat(style.paddingRight),
+          selected: node.getAttribute('aria-checked') === 'true', background: style.backgroundColor};
+      }));
+      expect(boxes.length).toBe(group === groups[0] ? 4 : 3);
+      expect(new Set(boxes.map(box => box.x)).size).toBe(boxes.length);
+      boxes.forEach((box, index) => {
+        expect(box.height).toBeGreaterThanOrEqual(viewport.width < 1024 ? 44 : 40);
+        expect(box.paddingLeft).toBeGreaterThanOrEqual(6);
+        expect(box.paddingRight).toBeGreaterThanOrEqual(6);
+        if (index) expect(box.x - boxes[index - 1].right).toBeGreaterThanOrEqual(2);
+      });
+      expect(boxes.find(box => box.selected)?.background).not.toBe(boxes.find(box => !box.selected)?.background);
+    }
+    await expect(page.getByText('최소 목표 잔여', {exact: true})).toHaveCount(0);
+    await page.screenshot({path: `test-results/draft-a-today-${viewport.width}.png`, fullPage: true});
     await expect(page.getByRole('button', {name: '지금 수집', exact: true})).toHaveCount(0);
     const nav = page.locator(viewport.width < 1024 ? '.tabbar' : '.sidebar__nav');
     for (const label of ['오늘', '계획', '달력', '분석', '기록']) {
       await nav.getByRole('button', {name: label, exact: true}).click();
       await expect(page.locator('.content')).not.toBeEmpty();
+      if (label === '계획') {
+        const disclosures = page.locator('.schedule-week__toggle');
+        await expect(page.locator('.schedule-week__toggle[aria-expanded="true"]')).toHaveCount(2);
+        await expect(disclosures.nth(0)).toHaveAttribute('aria-expanded', 'false');
+        await expect(disclosures.nth(1)).toHaveAttribute('aria-expanded', 'true');
+        await expect(disclosures.nth(2)).toHaveAttribute('aria-expanded', 'true');
+        const cards = await page.locator('.plan-strat').evaluateAll(nodes => nodes.map(node => {
+          const rect = node.getBoundingClientRect(); return {x: rect.x, y: rect.y};
+        }));
+        expect(new Set(cards.map(card => card.y)).size).toBe(viewport.width < 1024 ? 2 : 1);
+        expect(new Set(cards.map(card => card.x)).size).toBe(viewport.width < 1024 ? 2 : 4);
+        await page.screenshot({path: `test-results/draft-a-plan-${viewport.width}.png`, fullPage: true});
+        await disclosures.nth(0).click();
+        await expect(disclosures.nth(0)).toHaveAttribute('aria-expanded', 'true');
+      }
+      if (label === '달력' && viewport.width < 1024) {
+        await expect(page.locator('.cal-week-toggle[aria-expanded="true"]')).toHaveCount(1);
+        await expect(page.locator('.cal-week-toggle[aria-expanded="true"]')).toContainText('3/3 주');
+        await expect(page.locator('.cal-week-list')).toHaveCount(1);
+        await page.screenshot({path: 'test-results/draft-a-calendar-390.png', fullPage: true});
+        await page.locator('.cal-week-toggle').first().click();
+        await expect(page.locator('.cal-week-list')).toHaveCount(2);
+      }
       expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), label).toBeLessThanOrEqual(0);
     }
     await nav.getByRole('button', {name: '분석', exact: true}).click();
@@ -294,6 +338,11 @@ for (const viewport of [{width: 1440, height: 1000}, {width: 390, height: 844}])
     await expect(nav.getByRole('button')).toHaveCount(2);
     await expect(page.locator('.switcher__trigger, .target-segments')).toHaveCount(0);
     await expect(page.locator('.archive-notice')).toContainText('읽기 전용 확정 기록');
+    if (viewport.width < 1024) {
+      await nav.getByRole('button', {name: '달력', exact: true}).click();
+      await expect(page.locator('.cal-week-toggle[aria-expanded="true"]')).toHaveCount(1);
+      await expect(page.locator('.cal-week-toggle').first()).toHaveAttribute('aria-expanded', 'true');
+    }
   });
 }
 
@@ -382,15 +431,18 @@ test('collection request discloses started, running, cooldown and unavailable', 
   await page.route('**/api/month?**', route => route.fulfill({contentType: 'application/json', body: JSON.stringify(body)}));
   await page.route('**/api/archive', route => route.fulfill({contentType: 'application/json', body: '{"months":[]}'}));
   let index = 0;
-  const states = [{state: 'started'}, {state: 'running'}, {state: 'unavailable'}, {state: 'cooldown', retryAfterSeconds: 600}];
+  const states = [{state: 'started'}, {state: 'running'}, {state: 'forbidden'}, {state: 'unavailable'}, {state: 'cooldown', retryAfterSeconds: 600}];
   await page.route('**/api/sync', route => {
     const result = states[index++];
     expect(route.request().method()).toBe('POST');
-    return route.fulfill({status: result.state === 'unavailable' ? 503 : result.state === 'cooldown' ? 429 : 202, contentType: 'application/json', body: JSON.stringify(result)});
+    expect(route.request().headers()['x-planner-action']).toBe('sync');
+    expect(route.request().headers()['content-type']).toBe('application/json');
+    expect(route.request().postDataJSON()).toEqual({});
+    return route.fulfill({status: result.state === 'forbidden' ? 403 : result.state === 'unavailable' ? 503 : result.state === 'cooldown' ? 429 : 202, contentType: 'application/json', body: JSON.stringify(result)});
   });
   await page.goto('/app/?year=2042&month=3');
   const collect = page.getByRole('button', {name: '지금 수집'});
-  for (const message of ['수집 시작됨', '수집 중', '수집 불가', '수집 대기']) {
+  for (const message of ['수집 시작됨', '수집 중', '수집 불가', '수집 불가', '수집 대기']) {
     await collect.click();
     await expect(page.locator('.collect')).toContainText(message);
   }
