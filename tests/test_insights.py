@@ -163,7 +163,7 @@ def test_forecast_uses_slot_capacity_not_selected_target_feasibility(maximum):
     if maximum is not None:
         source["planner"]["plan"]["feasibility"] = {"possibleTargetMinutes": maximum}
     assert month_insights(source, now=NOW)["forecast"] == {
-        "recognizedMinutes": 480, "expectedMinutes": 1480,
+        "recognizedMinutes": 720, "expectedMinutes": 1480,
         "minMinutes": 1335, "maxMinutes": 2280,
     }
 
@@ -175,21 +175,20 @@ def test_forecast_excludes_holidays_and_includes_unplanned_workdays():
     assert month_insights(source, now=NOW)["forecast"]["minMinutes"] == 1050
 
 
-@pytest.mark.parametrize("worked,remaining,day_type,minimum,maximum", [
-    (240, 0, "workday", 1335, 2280),
-    (240, 200, "holiday", 1050, 1680),
-    (285, 200, "workday", 1335, 2280),
-    (650, 200, "workday", 1335, 2280),
+@pytest.mark.parametrize("worked,day_type,minimum,maximum", [
+    (240, "workday", 1335, 2280),
+    (285, "workday", 1335, 2280),
+    # Recorded time beyond the long-day cap and holiday work are kept, never dropped.
+    (650, "workday", 1700, 2330),
+    (240, "holiday", 1290, 1920),
 ])
-def test_forecast_today_slot_uses_full_capacity_independently_of_worked_or_remaining(
-    worked, remaining, day_type, minimum, maximum,
+def test_forecast_keeps_today_recorded_time_and_adds_only_unrecorded_capacity(
+    worked, day_type, minimum, maximum,
 ):
     source = payload()
-    source["days"][1]["day_type"] = day_type
-    source["planner"]["plan"]["todayAction"].update(
-        workedMinutes=worked, remainingTodayMinutes=remaining,
-    )
+    source["days"][1].update(day_type=day_type, work_minutes=worked)
     forecast = month_insights(source, now=NOW)["forecast"]
+    assert forecast["recognizedMinutes"] == 480 + worked
     assert forecast["minMinutes"] == minimum
     assert forecast["maxMinutes"] == maximum
 
@@ -455,8 +454,8 @@ def test_anchored_today_forecast_does_not_double_count_recorded_today(canonical)
         source, now=dt.datetime(2026, 7, 30, 15, tzinfo=NOW.tzinfo),
     )["forecast"]
     assert forecast == {
-        "recognizedMinutes": 13179, "expectedMinutes": 14112,
-        "minMinutes": 13749, "maxMinutes": 14379,
+        "recognizedMinutes": 13612, "expectedMinutes": 14112,
+        "minMinutes": 13897, "maxMinutes": 14379,
     }
 
 

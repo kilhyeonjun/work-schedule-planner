@@ -187,7 +187,15 @@ def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
         }
 
     recognized = sum(_recognized_minutes(day) for date, day in ledger.items() if date < today)
-    remaining_workdays = len(future) + (ledger.get(today, {}).get("day_type") == "workday")
+    today_recognized = _recognized_minutes(ledger[today]) if today in ledger else 0
+    current = recognized + today_recognized
+    today_is_workday = ledger.get(today, {}).get("day_type") == "workday"
+
+    def bound(day_minutes: int) -> int:
+        # Today's recorded time always counts; a workday today adds only its unrecorded capacity.
+        today_capacity = max(0, day_minutes - today_recognized) if today_is_workday else 0
+        return current + today_capacity + len(future) * day_minutes
+
     expected = plan.get("forecastMinutes")
     if expected is None:
         expected = recognized + plan["plannedTotalMinutes"]
@@ -197,9 +205,9 @@ def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
         "guards": guards,
         "leaveNow": leave_now,
         "forecast": {
-            "recognizedMinutes": recognized,
+            "recognizedMinutes": current,
             "expectedMinutes": expected,
-            "minMinutes": recognized + remaining_workdays * settings["shortDayMinutes"],
-            "maxMinutes": recognized + remaining_workdays * settings["longDayMinutes"],
+            "minMinutes": bound(settings["shortDayMinutes"]),
+            "maxMinutes": bound(settings["longDayMinutes"]),
         },
     }
