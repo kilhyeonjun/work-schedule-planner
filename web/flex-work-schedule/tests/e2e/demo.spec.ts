@@ -795,3 +795,39 @@ for (const scenario of [
     await expect(page.locator('.plan-feas')).not.toContainText('모두 최대로');
   });
 }
+
+test('classification exclusions cannot hide an exhausted-day capacity shortfall', async ({page}) => {
+  await page.addInitScript(() => {
+    const clock = window as typeof window & {__DEMO_NOW__?: string};
+    clock.__DEMO_NOW__ = '2042-03-04T19:40:00+09:00';
+  });
+  await page.route('**/demo/api/month?**', async route => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.truth = {current: {...body.truth?.current, effectiveRecognizedMinutes: 230, selectedTargetMinutes: 500}};
+    body.planner.selectedTargetMinutes = 500;
+    body.planner.targetOptions = [{key: 'target', label: '선택 목표', minutes: 500}];
+    body.planner.comparisons = [];
+    body.planner.plan = {
+      status: 'insufficient_slots', targetMinutes: 500, recognizedMinutes: -30,
+      forecastMinutes: 470, plannedTotalMinutes: 500, gapMinutes: 30,
+      accounting: {currentTargetEligibleMinutes: 200, excludedUnknownMinutes: 30, deferredRemoteMinutes: 0},
+      capacity: {planForecastMinutes: 470, maxForecastMinutes: 200, shortfallMinutes: 300, limits: [
+        {kind: 'today_anchor', dates: ['2042-03-04'], label: '오늘은 권장 퇴근 18:20 기준 · 19:40 기준 남은 근무 시간 없음'},
+      ]},
+      days: [{date: '2042-03-04', isToday: true, plannedMinutes: 500, plannedAdditionalMinutes: 270, currentWorkedMinutes: 230, window: '09:00–18:20', kind: 'normal'}],
+    };
+    body.days = [{date: '2042-03-04', day_type: 'workday', work_minutes: 230, recognized_minutes: 230, office_minutes: 200, unknown_minutes: 30, first_start: '09:00'}];
+    await route.fulfill({response, body: JSON.stringify(body)});
+  });
+  await page.goto('/demo/?tab=plan&target=500');
+  for (const name of ['계획', '달력', '분석']) {
+    await page.locator('.sidebar__nav').getByRole('button', {name, exact: true}).click();
+    const state = page.locator('.plan-feas');
+    await expect(state).toContainText('목표 도달 불가');
+    await expect(state).toContainText('현재 남은 시간으로 최대 3:20 · 목표 8:20까지 5:00 모자람');
+    await expect(state).toContainText('미분류 0:30 제외');
+    await expect(state).not.toContainText('자료 확인 필요');
+    await expect(state.getByRole('button')).toHaveCount(0);
+  }
+});

@@ -163,8 +163,8 @@ export function planState(plan: Plan, payload?: MonthPayload) {
   const hint = `${reasons || '제한 확인: 남은 근무일 · 주 상한 · 금요일 · 날짜 고정'}${unknown + remote > 0 ? ` · ${basis}` : ''}`;
   if (plan.status === 'infeasible_locked_target' || (plan.conflictReason && plan.status !== 'infeasible_mandatory_attendance')) return {label: '고정 충돌', warning: true, message: plan.conflictReason || (over > 0 ? `고정된 일정 때문에 목표보다 ${fmt(over)} 초과` : '고정된 일정의 조건을 확인하세요.'), hint: `날짜 고정과 오늘의 최소 근무선을 확인하세요. · ${basis}`};
   if (plan.status === 'infeasible_mandatory_attendance' || over > 0) return {label: '필수선 초과', warning: true, message: plan.conflictReason || (over > 0 ? `필수 근무선 때문에 목표보다 ${fmt(over)} 초과` : '필수 근무선의 조건을 확인하세요.'), hint: `필수 출근 최소선을 확인하세요. · ${basis}`};
-  if (gap > 0 && forecastExcluded >= gap) return {label: '자료 확인 필요', warning: true, message: `근무 분류 확인 필요 · ${basis}`, hint: '원본 근무 분류를 확인하세요. 제외·보류 시간은 목표 산입에 포함되지 않습니다.'};
-  if (gap > 0) {
+  if (maximumGap > 0 && forecastExcluded >= maximumGap) return {label: '자료 확인 필요', warning: true, message: `근무 분류 확인 필요 · ${basis}`, hint: '원본 근무 분류를 확인하세요. 제외·보류 시간은 목표 산입에 포함되지 않습니다.'};
+  if (gap > 0 || maximumGap > 0) {
     const message = maximumGap === 0
       ? `추천표대로면 ${fmt(recommendation)} · 목표까지 오늘 ${fmt(gap)} 추가 근무 필요 · 가능한 최대 ${fmt(possible)}`
       : possible > recommendation
