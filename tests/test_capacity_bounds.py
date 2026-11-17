@@ -13,7 +13,7 @@ def test_bounds_match_constrained_planner(weekly, worked, fixed):
                    "dateOverrides": {} if fixed is None else {"2042-03-05": fixed}},
         "days": [
             {"date": date, "dayType": "workday", "workedMinutes": actual, "recognizedMinutes": actual,
-             "leaveMinutes": 0, "availability": {"available": active, "minWorkMinutes": 285, "maxWorkMinutes": 600 if active else actual}}
+             "leaveMinutes": 0, "availability": {"available": active, "minWorkMinutes": 285 if active else 0, "maxWorkMinutes": 600 if active else actual}}
             for date, actual, active in [("2042-03-03", worked, False), ("2042-03-04", 0, True), ("2042-03-05", 0, True)]
         ],
     }

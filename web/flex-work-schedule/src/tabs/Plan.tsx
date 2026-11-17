@@ -36,7 +36,6 @@ export function PlanTab({payload, loading, selected, setTarget, settings}: TabPr
   const toggle = (key: string) => setExpanded(previous => ({...previous, [`${scope}:${key}`]: !(previous[`${scope}:${key}`] ?? defaultOpen.has(key))}));
   return <div className="plan-root">
     <Guards payload={displayed} />
-    <OfficeMinimum payload={displayed} />
     <Card className="plan-strategies">
       <h2>목표 전략</h2><p className="muted">고르면 모든 화면에 즉시 반영됩니다 · 정밀 조정은 상단 전략 설정</p>
       <Button className="plan-alternatives-toggle" variant="secondary" aria-expanded={alternativesOpen} aria-controls="plan-alternatives" onPress={() => setAlternativesOpen(open => !open)}>다른 전략 비교</Button>
@@ -48,6 +47,7 @@ export function PlanTab({payload, loading, selected, setTarget, settings}: TabPr
       <div className="plan-summary"><span className="chip">{state.label}</span><span>남은 실제 근무 <b>{fmt(plan.remainingMinutes)}</b> · 계획 <b>{fmt(plan.plannedTotalMinutes)}</b> · 목표 산입 예상 <b>{fmt(plan.forecastMinutes ?? ((plan.recognizedMinutes || 0) + (plan.plannedTotalMinutes || 0)))}</b></span></div>
       {(plan.inProgressRecognizedMinutes || 0) > 0 && <p className="muted">Flex 월 집계 {fmt(plan.sourceRecognizedMinutes)} · 집계 반영 대기 +{fmt(plan.inProgressRecognizedMinutes)}</p>}
     </Card>
+    <OfficeMinimum payload={displayed} />
     <div className={`plan-feas ${state.warning ? 'plan-feas--warn' : ''}`} role={state.warning ? 'alert' : 'status'}>
       <b>{state.label}</b><span>{state.message}</span>{state.hint && <span>{state.hint}</span>}
       {state.actionTarget != null && <Button variant="secondary" size="sm" onPress={() => setTarget(state.actionTarget!)}>목표를 {fmt(state.actionTarget)}로 맞추기</Button>}
