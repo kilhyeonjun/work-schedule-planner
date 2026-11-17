@@ -102,7 +102,7 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
         const state = planState(plan, payload);
         return <div className={`plan-feas ${state.warning ? 'plan-feas--warn' : ''}`} role={state.warning ? 'alert' : 'status'}>
           <b>{state.label}</b><span>{state.message}</span>{state.hint && <span>{state.hint}</span>}
-          {state.actionTarget != null && <button onClick={() => setTarget(state.actionTarget!)}>목표를 {fmt(state.actionTarget)}로 변경</button>}
+          {state.actionTarget != null && <button onClick={() => setTarget(state.actionTarget!)}>목표를 {fmt(state.actionTarget)}로 맞추기</button>}
         </div>;
       })()}
       <div className="an-col">
