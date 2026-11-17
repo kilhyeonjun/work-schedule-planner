@@ -219,10 +219,10 @@ export function TodayTab(props: TabProps) {
           <TargetProgress insights={payload?.planner?.insights} />
           {leaveNow && <Card className="leave-now">
             <h2>지금 퇴근하면</h2>
-            <p className="muted">오늘 남은 {fmt(leaveNow.todayRemainingMinutes)}을 이후 {leaveNow.remainingWorkdays}일에 나눕니다.</p>
+            <p className="muted">오늘 남은 {fmt(leaveNow.todayRemainingMinutes)}을 이후 {leaveNow.remainingWorkdays}일에 균등하게 나누는 가정입니다.</p>
             <div className="leave-now__average"><b>{fmt(leaveNow.averageDailyBeforeMinutes)}</b><span>→</span><b>{fmt(leaveNow.averageDailyAfterMinutes)}</b><span>/ 일</span></div>
-            <p>하루 +{fmt(leaveNow.additionalPerDayMinutes)} · {leaveNow.feasible ? '남은 날에 채울 수 있음' : `지금 퇴근하면 남은 날로 ${fmt(leaveNow.shortfallMinutes)} 못 채움`}</p>
-            <small className="muted">산술 시뮬레이션 · 저장된 계획은 바뀌지 않습니다</small>
+            <p>균등하게 나누면 하루 +{fmt(leaveNow.additionalPerDayMinutes)} · {leaveNow.feasible ? '일 상한 이내' : `상한 초과 ${fmt(leaveNow.shortfallMinutes)}`}</p>
+            <small className="muted">일 상한만 비교한 산술 시뮬레이션 · 주 상한·날짜 고정 등 실제 배정은 미검증 · 저장된 계획은 바뀌지 않습니다</small>
           </Card>}
           {upcoming.length > 0 && <Card className="upcoming">
             <h2>다음 일정</h2>

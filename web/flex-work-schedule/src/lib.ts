@@ -1,9 +1,9 @@
 import {useEffect, useState} from 'react';
 
 const API_BASE = window.location.pathname.startsWith('/demo') ? '/demo/api' : '/api';
-const demoWindow = window as typeof window & {__DEMO_TODAY__?: string};
+const demoWindow = window as typeof window & {__DEMO_TODAY__?: string; __DEMO_NOW__?: string};
 if (window.location.pathname.startsWith('/demo')) demoWindow.__DEMO_TODAY__ ??= '2042-03-04';
-export const nowDate = () => demoWindow.__DEMO_TODAY__ ? new Date(`${demoWindow.__DEMO_TODAY__}T12:00:00`) : new Date();
+export const nowDate = () => demoWindow.__DEMO_NOW__ ? new Date(demoWindow.__DEMO_NOW__) : demoWindow.__DEMO_TODAY__ ? new Date(`${demoWindow.__DEMO_TODAY__}T12:00:00`) : new Date();
 
 // ---------- API types (contract: /api/month, /api/archive — server unchanged) ----------
 
@@ -34,8 +34,8 @@ export type TodayAction = {
   minimumTargetRemainingTodayMinutes?: number;
 };
 
-export type Capacity = {maxForecastMinutes: number; shortfallMinutes: number; limits: {
-  kind: 'weekly_max' | 'friday_cap' | 'daily_max' | 'date_override' | 'no_slots' | 'core_time';
+export type Capacity = {planForecastMinutes: number; maxForecastMinutes: number; shortfallMinutes: number; limits: {
+  kind: 'weekly_max' | 'friday_cap' | 'daily_max' | 'date_override' | 'no_slots' | 'core_time' | 'today_anchor';
   dates: string[]; label: string;
 }[]};
 
@@ -152,6 +152,8 @@ export function planState(plan: Plan, payload?: MonthPayload) {
   const forecastExcluded = (plan.accounting?.excludedUnknownMinutes || 0) + (plan.accounting?.deferredRemoteMinutes || 0);
   const eligible = plan.accounting?.currentTargetEligibleMinutes;
   const possible = plan.capacity?.maxForecastMinutes ?? plan.forecastMinutes ?? ((plan.recognizedMinutes || 0) + (plan.plannedTotalMinutes || 0));
+  const recommendation = plan.capacity?.planForecastMinutes ?? plan.forecastMinutes ?? possible;
+  const maximumGap = plan.capacity?.shortfallMinutes ?? gap;
   const basis = [
     ...(payload ? [`현재 인정 ${fmt(currentRecognized(payload))}${eligible != null ? ` 중 목표 산입 ${fmt(eligible)}` : ''}`] : eligible != null ? [`목표 산입 ${fmt(eligible)}`] : []),
     ...(unknown > 0 ? [`미분류 ${fmt(unknown)} 제외`] : []),
@@ -162,7 +164,17 @@ export function planState(plan: Plan, payload?: MonthPayload) {
   if (plan.status === 'infeasible_locked_target' || (plan.conflictReason && plan.status !== 'infeasible_mandatory_attendance')) return {label: '고정 충돌', warning: true, message: plan.conflictReason || (over > 0 ? `고정된 일정 때문에 목표보다 ${fmt(over)} 초과` : '고정된 일정의 조건을 확인하세요.'), hint: `날짜 고정과 오늘의 최소 근무선을 확인하세요. · ${basis}`};
   if (plan.status === 'infeasible_mandatory_attendance' || over > 0) return {label: '필수선 초과', warning: true, message: plan.conflictReason || (over > 0 ? `필수 근무선 때문에 목표보다 ${fmt(over)} 초과` : '필수 근무선의 조건을 확인하세요.'), hint: `필수 출근 최소선을 확인하세요. · ${basis}`};
   if (gap > 0 && forecastExcluded >= gap) return {label: '자료 확인 필요', warning: true, message: `근무 분류 확인 필요 · ${basis}`, hint: '원본 근무 분류를 확인하세요. 제외·보류 시간은 목표 산입에 포함되지 않습니다.'};
-  if (gap > 0) return {label: '목표 도달 불가', warning: true, message: `남은 근무일을 모두 최대로 잡아도 ${fmt(possible)}까지 · 목표 ${fmt(plan.targetMinutes)}보다 ${fmt(gap)} 모자람`, hint, actionTarget: possible};
+  if (gap > 0) {
+    const message = maximumGap === 0
+      ? `추천표대로면 ${fmt(recommendation)} · 목표까지 오늘 ${fmt(gap)} 추가 근무 필요 · 가능한 최대 ${fmt(possible)}`
+      : possible > recommendation
+        ? `추천표대로면 ${fmt(recommendation)} · 오늘 더 일하면 최대 ${fmt(possible)} · 목표 ${fmt(plan.targetMinutes)}까지 ${fmt(maximumGap)} 모자람`
+        : possible < recommendation
+          ? `추천표 예상 ${fmt(recommendation)} · 현재 남은 시간으로 최대 ${fmt(possible)} · 목표 ${fmt(plan.targetMinutes)}까지 ${fmt(maximumGap)} 모자람`
+          : `추천표 기준 ${fmt(recommendation)} · 목표 ${fmt(plan.targetMinutes)}까지 ${fmt(maximumGap)} 모자람`;
+    return {label: maximumGap > 0 ? '목표 도달 불가' : '오늘 추가 근무 필요', warning: true, message, hint,
+      actionTarget: possible >= recommendation ? recommendation : undefined};
+  }
   return {label: plan.status === 'satisfied' ? '충족' : '가능', warning: false, message: basis, hint: unknown + remote > 0 ? '제외·보류 시간은 목표 산입에 포함되지 않습니다.' : ''};
 }
 export const todayIso = () => {
