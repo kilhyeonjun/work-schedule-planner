@@ -92,3 +92,6 @@ Monday–Sunday month dates and remaining/excess `H:MM` for the weekly 52-hour
 limit, Friday's planned `HH:MM` departure versus 16:00, and a day's actual versus
 required rest in `H:MM`. Breaches precede risks; each severity sorts by date
 (weekly guards use the clipped week start).
+
+Weekly aggregation treats omitted zero-valued work minutes on future ledger rows
+as zero, matching the public read model's sparse future-day representation.
