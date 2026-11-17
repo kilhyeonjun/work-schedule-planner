@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from .model import Day, Policy
+from .model import Day, Policy, WorkMonth
 
 
 def daily_work_cap(day: Day, policy: Policy) -> int:
@@ -56,3 +56,29 @@ def verify_constraints(days: tuple[Day, ...], policy: Policy, allocated: dict[st
     if any(day.availability.min_work_minutes for day in days):
         result["minimumWorkPassed"] = minimum_ok
     return result
+
+def additional_work_bounds(month: WorkMonth) -> tuple[int, int]:
+    """Exact bounds for optional attendance intervals and fixed dates, by week."""
+    baseline = weekly_work_baseline(month.days)
+    reachable: dict[str, int] = {}
+    fixed: dict[str, int] = defaultdict(int)
+    for day in month.days:
+        cap = daily_additional_cap(day, month.policy)
+        if cap == 0:
+            continue
+        week = day.week_key
+        bits = reachable.get(week, 1)
+        if day.date in month.policy.date_overrides:
+            reachable[week] = bits << cap
+            fixed[week] += cap
+        else:
+            # Attendance is either absent or a continuous [minimum, cap] interval.
+            updated = bits
+            for amount in range(max(1, minimum_additional_work(day)), cap + 1):
+                updated |= bits << amount
+            reachable[week] = updated
+        room = max(0, month.policy.weekly_limit_minutes - baseline.get(week, 0))
+        reachable[week] &= (1 << (room + 1)) - 1
+    minimum = sum(fixed.values())
+    maximum = sum(max(fixed.get(week, 0), bits.bit_length() - 1) for week, bits in reachable.items())
+    return minimum, maximum

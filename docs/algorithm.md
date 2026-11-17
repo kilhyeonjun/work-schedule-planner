@@ -50,10 +50,11 @@ leave without a plan row) and the plan's still unrecorded work
 recognition. `plan.forecastMinutes` is not used: live plans count
 target-eligible minutes, which exclude deferred remote and unclassified work, so
 that total is not comparable with recognized minutes. Minimum and maximum keep all recorded
-recognition and confirmed leave, then use the common constraint engine with zero
-additional target and an unreachable target respectively. Optional attendance
-may be zero at the lower bound; fixed dates remain fixed. Capacity respects
-3,120 weekly work minutes, Friday's normal cap, daily maxima, overrides, leave,
+recognition and confirmed leave. The shared daily-cap, attendance-floor and weekly
+baseline primitives define each optional day's interval (zero or minimum-to-cap);
+fixed dates have one allowed value. A per-week reachable-minutes bitset yields
+exact minimum/maximum bounds without repeatedly constructing long recommendations.
+This respects 3,120 weekly work minutes, Friday's normal cap, overrides, leave,
 and today's remaining wall-clock time and statutory break thresholds.
 
 ### Target pace and burn rate

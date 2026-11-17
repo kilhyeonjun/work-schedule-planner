@@ -838,6 +838,7 @@ for (const width of [1440, 390]) {
     await page.goto('/demo/?year=2042&month=3&tab=today');
     await expect(page.getByRole('heading', {name: '사무실 최소 기준', exact: true})).toBeVisible();
     await expect(page.locator('.office-minimum')).toContainText('사무실·휴가');
+    await expect(page.locator('.target-segments')).toBeVisible();
     await expect(page.locator('.office-minimum')).toContainText('최소 120:00');
     await expect(page.locator('.office-minimum')).toContainText('재택 2:00은 최소 기준을 채운 뒤 목표에 들어감');
     await expect(page.locator('.office-minimum')).toContainText(/추천표대로면 .*에 충족/);
@@ -848,3 +849,23 @@ for (const width of [1440, 390]) {
     }
   });
 }
+
+test('office minimum collapses when met and omits missing breakdown', async ({page}) => {
+  let missing = false;
+  await page.route('**/demo/api/month?**', async route => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.planner.plan.officeMinimum = missing ? null : {
+      requiredMinutes: 7200, currentMinutes: 7300, remainingMinutes: 0, satisfied: true,
+      projectedMinutes: 7800, projectedSatisfied: true, deferredRemoteMinutes: 0, remoteCountsAfterMinimum: true,
+    };
+    await route.fulfill({response, json: body});
+  });
+  await page.goto('/demo/?year=2042&month=3&tab=today');
+  await expect(page.locator('.office-minimum')).toContainText('사무실 최소 기준 충족');
+  await expect(page.locator('.office-minimum progress')).toHaveCount(0);
+  missing = true;
+  await page.reload();
+  await expect(page.locator('.today-month')).toBeVisible();
+  await expect(page.locator('.office-minimum')).toHaveCount(0);
+});

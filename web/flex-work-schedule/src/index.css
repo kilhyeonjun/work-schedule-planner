@@ -100,7 +100,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--indigo); ou
   .content { padding: 16px 16px calc(90px + env(safe-area-inset-bottom)); }
   .statusbar { padding: 8px 16px; gap: 6px; }
   .statusbar__crumb { flex: 1; } .statusbar h1 { font-size: 16px; }
-  .statusbar__spacer, .statusbar > .statusbar__chip:not(.guard-count) { display: none; }
+  .statusbar__spacer { display: none; }
+  .statusbar > .statusbar__chip { order: 8; }
   .target-segments { order: 7; width: 100%; overflow-x: auto; }
   .statusbar__nav { order: 3; } .switcher { order: 4; }
   .statusbar > .guard-count { order: 5; }

@@ -97,8 +97,9 @@ def _target_progress(payload: dict, today: str) -> dict:
     }
 
 def _constrained_projection(payload: dict, now: dt.datetime, *, leave_now: bool = False) -> tuple[int, int]:
-    """Allocate the maximum through the same daily/weekly constraint engine as plans."""
-    from .planner import plan_month
+    """Compute bounds using the planner's daily/weekly feasibility primitives."""
+    from .feasibility import additional_work_bounds
+    from .model import parse_work_month
 
     settings = payload["planner"]["settings"]
     normal = settings.get("normalDayMinutes", min(500, settings["longDayMinutes"]))
@@ -156,11 +157,10 @@ def _constrained_projection(payload: dict, now: dt.datetime, *, leave_now: bool 
               "policy": {"weeklyLimitMinutes": 3120, "normalMinutes": normal,
                          "maxMinutes": settings["longDayMinutes"], "dateOverrides": overrides},
               "days": rows}
-    maximum = plan_month(source)
-    source["targetMinutes"] = baseline
-    minimum = plan_month(source)
-    return (baseline + sum(day["plannedAdditionalMinutes"] for day in minimum["days"]),
-            baseline + sum(day["plannedAdditionalMinutes"] for day in maximum["days"]))
+    if not rows:
+        return baseline, baseline
+    minimum, maximum = additional_work_bounds(parse_work_month(source))
+    return baseline + minimum, baseline + maximum
 
 
 
