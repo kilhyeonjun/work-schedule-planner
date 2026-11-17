@@ -40,13 +40,19 @@ def payload():
 
 @pytest.mark.parametrize("minutes,level", [(2159, None), (2160, "risk"), (2400, "risk"), (2401, "breach")])
 @pytest.mark.parametrize("projected", [True, False])
-def test_weekly_guard_threshold_and_fallback(minutes, level, projected):
+def test_weekly_guard_threshold_uses_actual_plus_planned_not_summary_projection(minutes, level, projected):
     source = payload()
+    for day in source["days"]:
+        day["work_minutes"] = 0
+    source["days"][0]["work_minutes"] = 1000
+    for day in source["planner"]["plan"]["days"]:
+        day["plannedAdditionalMinutes"] = 0
+    source["planner"]["plan"]["days"][0]["plannedAdditionalMinutes"] = minutes - 1000
     week = {"key": "2042-W10", "weeklyMaxMinutes": 2400,
             "actualMinutes": 1000, "plannedAdditionalMinutes": minutes - 1000}
     if projected:
-        week["projectedActualMinutes"] = minutes
-        week["actualMinutes"] = 0  # Explicit projection takes precedence.
+        week["projectedActualMinutes"] = 99999  # Stale summary cannot override ledger plus plan.
+        week["actualMinutes"] = 0
     source["planner"]["plan"]["summary"]["weekly"] = [week]
     guards = month_insights(source, now=NOW)["guards"]
     assert guards == ([] if level is None else [{
@@ -98,7 +104,7 @@ def test_rest_ignores_future_and_nonongoing_today():
     source = payload()
     for day in source["days"][1:]:
         day.update(work_minutes=480, rest_minutes=0, is_ongoing=False)
-    assert month_insights(source, now=NOW)["guards"] == []
+    assert not any(guard["key"] == "rest_break" for guard in month_insights(source, now=NOW)["guards"])
 
 
 def test_leave_now_feasible_projection():
@@ -157,7 +163,7 @@ def test_forecast_uses_slot_capacity_not_selected_target_feasibility(maximum):
     if maximum is not None:
         source["planner"]["plan"]["feasibility"] = {"possibleTargetMinutes": maximum}
     assert month_insights(source, now=NOW)["forecast"] == {
-        "recognizedMinutes": 720, "expectedMinutes": 1720,
+        "recognizedMinutes": 480, "expectedMinutes": 1480,
         "minMinutes": 1335, "maxMinutes": 2280,
     }
 
@@ -170,12 +176,12 @@ def test_forecast_excludes_holidays_and_includes_unplanned_workdays():
 
 
 @pytest.mark.parametrize("worked,remaining,day_type,minimum,maximum", [
-    (240, 0, "workday", 1290, 1920),
-    (240, 200, "holiday", 1290, 1920),
-    (285, 200, "workday", 1290, 2235),
-    (650, 200, "workday", 1290, 1920),
+    (240, 0, "workday", 1335, 2280),
+    (240, 200, "holiday", 1050, 1680),
+    (285, 200, "workday", 1335, 2280),
+    (650, 200, "workday", 1335, 2280),
 ])
-def test_forecast_today_slot_uses_nonnegative_short_and_long_remainders(
+def test_forecast_today_slot_uses_full_capacity_independently_of_worked_or_remaining(
     worked, remaining, day_type, minimum, maximum,
 ):
     source = payload()
@@ -385,6 +391,11 @@ def test_present_options_do_not_fall_back_to_selected_derived_targets():
 def test_week_guard_label_clips_iso_week_to_payload_month(year, month, week_key, label):
     source = payload()
     source.update(year=year, month=month)
+    source["days"] = [{
+        "date": f"{year}-{month:02d}-01" if week_key.endswith("09") or month == 1 else f"{year}-{month:02d}-31",
+        "day_type": "workday", "work_minutes": 3020, "rest_minutes": 60,
+    }]
+    source["planner"]["plan"]["days"] = []
     source["planner"]["plan"]["summary"]["weekly"] = [{
         "key": week_key, "projectedActualMinutes": 3020, "weeklyMaxMinutes": 3120,
     }]
@@ -400,6 +411,13 @@ def test_guard_labels_are_self_contained_and_severity_then_date_sorted():
     source["days"][0]["rest_minutes"] = 30
     source["days"][1]["rest_minutes"] = 10
     source["planner"]["plan"]["days"][-1]["window"] = "09:00–17:05"
+    for day in source["planner"]["plan"]["days"]:
+        day["plannedAdditionalMinutes"] = 0
+    source["planner"]["plan"]["days"][-1]["plannedAdditionalMinutes"] = 2530
+    source["planner"]["plan"]["days"].append({
+        "date": "2042-03-10", "plannedAdditionalMinutes": 3020,
+        "plannedMinutes": 3020, "window": "—",
+    })
     guards = month_insights(source, now=NOW)["guards"]
     assert [(guard["level"], guard["label"]) for guard in guards] == [
         ("breach", "3/3–3/9 주 52시간 2:10 초과 예상"),
@@ -408,3 +426,50 @@ def test_guard_labels_are_self_contained_and_severity_then_date_sorted():
         ("risk", "3/4 휴게 0:10 · 필요 0:30"),
         ("risk", "3/10–3/16 주 52시간까지 1:40 남음"),
     ]
+
+
+@pytest.mark.parametrize("canonical", [True, False])
+def test_anchored_today_forecast_does_not_double_count_recorded_today(canonical):
+    source = payload()
+    source.update(year=2026, month=7)
+    source["derived"]["recognizedMinutes"] = 13612
+    source["days"] = [
+        {"date": date, "day_type": "workday", "work_minutes": worked,
+         "recognized_minutes": worked, "rest_minutes": 60}
+        for date, worked in [
+            ("2026-07-01", 11452), ("2026-07-27", 500),
+            ("2026-07-28", 623), ("2026-07-29", 604),
+            ("2026-07-30", 433), ("2026-07-31", 0),
+        ]
+    ]
+    plan = source["planner"]["plan"]
+    plan["days"] = [
+        {"date": "2026-07-30", "plannedMinutes": 463, "plannedAdditionalMinutes": 30, "window": "07:17–16:00"},
+        {"date": "2026-07-31", "plannedMinutes": 470, "plannedAdditionalMinutes": 470, "window": "07:40–16:00"},
+    ]
+    plan["plannedTotalMinutes"] = 933
+    if canonical:
+        plan["forecastMinutes"] = 14112
+        plan["plannedTotalMinutes"] = 1000  # Canonical forecast takes precedence.
+    forecast = month_insights(
+        source, now=dt.datetime(2026, 7, 30, 15, tzinfo=NOW.tzinfo),
+    )["forecast"]
+    assert forecast == {
+        "recognizedMinutes": 13179, "expectedMinutes": 14112,
+        "minMinutes": 13749, "maxMinutes": 14379,
+    }
+
+
+def test_completed_week_breach_without_plan_rows_and_outside_month_is_excluded():
+    source = payload()
+    source.update(year=2042, month=3)
+    source["days"] = [
+        {"date": "2042-03-01", "day_type": "weekend", "work_minutes": 3121, "rest_minutes": 60},
+        {"date": "2042-02-28", "day_type": "workday", "work_minutes": 999, "rest_minutes": 60},
+    ]
+    source["planner"]["plan"]["days"] = []
+    source["planner"]["plan"]["summary"]["weekly"] = []
+    assert month_insights(source, now=NOW)["guards"] == [{
+        "key": "weekly_max", "level": "breach", "weekKey": "2042-W09",
+        "label": "3/1–3/2 주 52시간 0:01 초과 예상", "minutes": 3121, "limitMinutes": 3120,
+    }]

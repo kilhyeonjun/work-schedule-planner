@@ -21,6 +21,10 @@ def _month_day(date: str) -> str:
     return f"{parsed.month}/{parsed.day}"
 
 
+def _recognized_minutes(day: dict) -> int:
+    return day.get("recognized_minutes", day.get("work_minutes", 0) + day.get("timeoff_minutes", 0))
+
+
 def _target_progress(payload: dict, today: str) -> dict:
     """Compute pace from completed ledger dates, independent of selected totals."""
     ledger = {day["date"]: day for day in payload["days"]}
@@ -29,11 +33,8 @@ def _target_progress(payload: dict, today: str) -> dict:
     remaining = [date for date in workdays if date >= today]
     derived = payload["derived"]
 
-    def recognized(day: dict) -> int:
-        return day.get("recognized_minutes", day.get("work_minutes", 0) + day.get("timeoff_minutes", 0))
-
-    official = sum(recognized(day) for date, day in ledger.items() if date < today)
-    effective = official + recognized(ledger.get(today, {}))
+    official = sum(_recognized_minutes(day) for date, day in ledger.items() if date < today)
+    effective = official + _recognized_minutes(ledger.get(today, {}))
     planner = payload.get("planner") or {}
     options = planner.get("targetOptions")
     option_minutes = {option["key"]: option["minutes"] for option in options or []}
@@ -104,16 +105,23 @@ def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
     year, month = payload.get("year", now.year), payload.get("month", now.month)
     month_start = dt.date(year, month, 1)
     month_end = dt.date(year, month, calendar.monthrange(year, month)[1])
-    for week in plan["summary"]["weekly"]:
-        minutes = week.get("projectedActualMinutes")
-        if minutes is None:
-            minutes = week["actualMinutes"] + week["plannedAdditionalMinutes"]
-        limit = week["weeklyMaxMinutes"]
+    weekly_limits = {week["key"]: week["weeklyMaxMinutes"] for week in plan["summary"]["weekly"]}
+    weekly_totals = {}
+    for rows, field in ((ledger, "work_minutes"), (planned, "plannedAdditionalMinutes")):
+        for date, day in rows.items():
+            parsed = dt.date.fromisoformat(date)
+            if (parsed.year, parsed.month) != (year, month):
+                continue
+            week_year, week_number, _ = parsed.isocalendar()
+            key = f"{week_year}-W{week_number:02d}"
+            weekly_totals[key] = weekly_totals.get(key, 0) + day[field]
+    for key, minutes in sorted(weekly_totals.items()):
+        limit = weekly_limits.get(key, 3120)
         if minutes >= limit - 240:
-            week_year, week_number = week["key"].split("-W")
+            week_year, week_number = key.split("-W")
             monday = dt.date.fromisocalendar(int(week_year), int(week_number), 1)
             start, end = max(monday, month_start), min(monday + dt.timedelta(days=6), month_end)
-            week_starts[week["key"]] = start.isoformat()
+            week_starts[key] = start.isoformat()
             span = f"{_month_day(start.isoformat())}–{_month_day(end.isoformat())}"
             label = (
                 f"{span} 주 52시간 {_duration(minutes - limit)} 초과 예상"
@@ -121,7 +129,7 @@ def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
             )
             guards.append({
                 "key": "weekly_max", "level": "breach" if minutes > limit else "risk",
-                "weekKey": week["key"], "label": label,
+                "weekKey": key, "label": label,
                 "minutes": minutes, "limitMinutes": limit,
             })
 
@@ -178,10 +186,11 @@ def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
             "feasible": shortfall == 0, "shortfallMinutes": shortfall,
         }
 
-    recognized = payload["derived"]["recognizedMinutes"]
-    today_worked = action.get("workedMinutes", ledger.get(today, {}).get("work_minutes", 0))
-    today_short = max(0, settings["shortDayMinutes"] - today_worked) if leave_now is not None else 0
-    today_long = max(0, settings["longDayMinutes"] - today_worked) if leave_now is not None else 0
+    recognized = sum(_recognized_minutes(day) for date, day in ledger.items() if date < today)
+    remaining_workdays = len(future) + (ledger.get(today, {}).get("day_type") == "workday")
+    expected = plan.get("forecastMinutes")
+    if expected is None:
+        expected = recognized + plan["plannedTotalMinutes"]
     return {
         "asOf": now.isoformat(timespec="minutes")[:16],
         **_target_progress(payload, today),
@@ -189,8 +198,8 @@ def month_insights(payload: dict, *, now: dt.datetime) -> dict | None:
         "leaveNow": leave_now,
         "forecast": {
             "recognizedMinutes": recognized,
-            "expectedMinutes": recognized + plan["plannedTotalMinutes"],
-            "minMinutes": recognized + len(future) * settings["shortDayMinutes"] + today_short,
-            "maxMinutes": recognized + len(future) * settings["longDayMinutes"] + today_long,
+            "expectedMinutes": expected,
+            "minMinutes": recognized + remaining_workdays * settings["shortDayMinutes"],
+            "maxMinutes": recognized + remaining_workdays * settings["longDayMinutes"],
         },
     }

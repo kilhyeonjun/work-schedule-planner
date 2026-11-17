@@ -392,6 +392,7 @@ def month_payload(
             "inProgressRecognizedMinutes": 0,
             "remainingMinutes": max(0, target - total_recognized),
             "plannedTotalMinutes": result["plannedAdditionalMinutes"],
+            "forecastMinutes": total_recognized + result["plannedAdditionalMinutes"],
             "gapMinutes": result["gapMinutes"],
             "projectedOverFixedMinutes": 0,
             "projectedExtraPayPreTaxKrw": 0,
