@@ -45,7 +45,7 @@ def main():
     for line in sys.stdin:
         try:
             response = {"ok": True, "result": dispatch(json.loads(line))}
-        except (ValueError, TypeError, AssertionError) as error:
+        except (ValueError, TypeError, AssertionError, KeyError, AttributeError, OverflowError) as error:
             response = {"ok": False, "error": {"type": type(error).__name__, "message": str(error)}}
         print(json.dumps(response, ensure_ascii=False), flush=True)
 

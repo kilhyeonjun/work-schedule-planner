@@ -122,3 +122,80 @@ golden!(weekday_cap, "weekday-cap");
 golden!(partial_leave_weekly_cap, "partial-leave-weekly-cap");
 golden!(infeasible_target, "infeasible-target");
 golden!(input_order_determinism, "input-order-determinism");
+
+#[test]
+fn python_int_coercions_are_explicit_and_fallible() {
+    use work_planner::input::py_int;
+    for value in [
+        json!(500),
+        json!(500.0),
+        json!(500.9),
+        json!("5_00"),
+        json!(" +500 "),
+    ] {
+        assert_eq!(py_int(&value).unwrap(), 500);
+    }
+    assert_eq!(py_int(&json!(-500.9)).unwrap(), -500);
+    assert_eq!(py_int(&json!("500.0")).unwrap_err().kind, "ValueError");
+    assert_eq!(py_int(&json!([])).unwrap_err().kind, "TypeError");
+}
+
+#[test]
+fn iso_times_follow_python_311_and_explicit_runtime_compatibility() {
+    use work_planner::input::{IsoCompatibility, iso_time, iso_time_with_compat};
+    for raw in [
+        "0900",
+        "09:00",
+        "T090000",
+        "09:00:00.1234567",
+        "09:00+09:00",
+        "09.5",
+    ] {
+        let value = iso_time(&json!(raw)).unwrap();
+        assert_eq!((value.hour, value.minute), (9, 0));
+    }
+    assert!(iso_time(&json!("24:00")).is_err());
+    let newer = IsoCompatibility {
+        midnight_24: true,
+        short_fraction: false,
+    };
+    assert_eq!(
+        iso_time_with_compat(&json!("24:00"), newer).unwrap().hour,
+        0
+    );
+    assert!(iso_time_with_compat(&json!("09.5"), newer).is_err());
+    assert!(iso_time(&json!("24:01")).is_err());
+}
+
+#[test]
+fn arbitrary_json_integers_are_rejected_before_arithmetic() {
+    let mut input = source();
+    input["days"][0]["workedMinutes"] = serde_json::from_str("922337203685477580700").unwrap();
+    assert_eq!(plan_month(&input).unwrap_err().kind, "ValueError");
+}
+
+#[test]
+fn malformed_projection_days_are_an_error_not_a_panic() {
+    let input = json!({
+        "days": [], "derived": {}, "planner": {
+            "settings": {"shortDayMinutes":285,"longDayMinutes":600},
+            "plan": {"days":[],"summary":{"weekly":[]}}
+        }
+    });
+    let result = work_planner::insights::month_insights(
+        &input,
+        "2042-03-04T12:00:00+09:00",
+        Some(&json!({"days":null})),
+    );
+    assert_eq!(result.unwrap_err().kind, "TypeError");
+    assert!(plan_month(&source()).is_ok());
+}
+
+#[test]
+fn strict_iso_dates_do_not_accept_unpadded_calendar_fields() {
+    use work_planner::model::date;
+    for value in ["2042-3-03", "2042-03-3", "2042W10-1", "0000-01-01"] {
+        assert!(date(value).is_err(), "{value}");
+    }
+    assert_eq!(date("2042-W10").unwrap(), date("2042W101").unwrap());
+}
