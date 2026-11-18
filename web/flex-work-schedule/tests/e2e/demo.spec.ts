@@ -527,7 +527,7 @@ for (const scenario of [
       await expect(state).toContainText('추천표 기준 18:00 · 목표 20:00까지 2:00 모자람');
       await expect(action).toBeVisible();
       await expect(page.locator('.switcher__trigger')).toContainText('20:00');
-      await expect(page.locator('.plan-summary')).toContainText('계획 8:00 · 목표 산입 예상 18:00');
+      await expect(page.locator('.plan-summary')).toContainText('계획 8:00 · 추천표 기준 목표 산입 18:00');
     } else {
       await expect(state.getByRole('button')).toHaveCount(0);
     }
@@ -847,7 +847,7 @@ test('calendar credits deferred remote in the forecast, not in current recogniti
         currentDeferredRemoteMinutes: 748, excludedUnknownMinutes: 0, deferredRemoteMinutes: 748},
       officeMinimum: {requiredMinutes: 10080, currentMinutes: 6943, remainingMinutes: 3137,
         satisfied: false, projectedMinutes: 11672, projectedSatisfied: true, deferredRemoteMinutes: 748,
-        projectedReleasedRemoteMinutes: 748, remoteCountsAfterMinimum: true},
+        forecastReleasedRemoteMinutes: 748, forecastReleaseDate: '2042-03-05', remoteCountsAfterMinimum: true},
       capacity: {planForecastMinutes: 12420, maxForecastMinutes: 12420, maxOfficeMinutes: 11672, shortfallMinutes: 0, limits: []},
       days: [{date: '2042-03-05', kind: 'normal', window: '06:40–16:00', plannedMinutes: 500, plannedAdditionalMinutes: 260}],
     };
@@ -864,6 +864,35 @@ test('calendar credits deferred remote in the forecast, not in current recogniti
   await expect(metrics).toContainText('계산상 남은 근무78:49');
   await expect(metrics).toContainText('추천표 기준 목표 산입207:00');
   await expect(page.locator('.cal-next__add')).toHaveText('+4:20');
+});
+
+test('November running total credits 12:28 only on the office threshold date', async ({page}) => {
+  const additions = [622, 500, 622, 622, 621, 621, 500, 621];
+  const dates = [19, 20, 23, 24, 25, 26, 27, 30].map(day => `2026-11-${day}`);
+  await page.addInitScript(() => {
+    (window as typeof window & {__DEMO_NOW__?: string}).__DEMO_NOW__ = '2026-11-18T22:55:00+09:00';
+  });
+  await page.route('**/demo/api/month?**', async route => {
+    const response = await page.request.get('/demo/api/month?year=2042&month=3');
+    const body = await response.json();
+    body.year = 2026;
+    body.month = 11;
+    body.planner.insights = null;
+    body.planner.plan = {
+      status: 'planned', targetMinutes: 12420, recognizedMinutes: 6943, plannedTotalMinutes: 4729, forecastMinutes: 12420,
+      officeMinimum: {requiredMinutes: 10080, currentMinutes: 6943, remainingMinutes: 3137, projectedMinutes: 11672,
+        satisfied: false, projectedSatisfied: true, deferredRemoteMinutes: 748, forecastReleasedRemoteMinutes: 748,
+        forecastReleaseDate: '2026-11-26', remoteCountsAfterMinimum: true},
+      days: dates.map((date, i) => ({date, kind: 'normal', plannedMinutes: additions[i], plannedAdditionalMinutes: additions[i], window: '06:40–16:00'})),
+    };
+    await route.fulfill({response, json: body});
+  });
+  await page.goto('/demo/?year=2026&month=11&tab=plan&target=12420');
+  const totals = ['126:05', '134:25', '144:47', '155:09', '165:30', '188:19', '196:39', '207:00'];
+  for (const [i, date] of dates.entries()) {
+    await expect(page.getByRole('button', {name: `${date} 가정 바꾸기`}).locator('b')).toHaveText(totals[i]);
+  }
+  await expect(page.locator('.plan-summary')).toContainText('추천표 기준 목표 산입 207:00');
 });
 
 for (const scenario of [

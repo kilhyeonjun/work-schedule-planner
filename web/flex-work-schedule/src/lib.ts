@@ -42,9 +42,10 @@ export type Capacity = {planForecastMinutes: number; maxForecastMinutes: number;
 export type Plan = {
   status?: string; targetMinutes?: number; recognizedMinutes?: number;
   sourceRecognizedMinutes?: number; inProgressRecognizedMinutes?: number;
+  futureTimeoffMinutes?: number;
   remainingMinutes?: number; plannedTotalMinutes?: number; forecastMinutes?: number; gapMinutes?: number; overTargetMinutes?: number; conflictReason?: string;
   capacity?: Capacity;
-  officeMinimum?: {requiredMinutes: number; currentMinutes: number; remainingMinutes: number; satisfied: boolean; projectedMinutes: number; projectedSatisfied: boolean; deferredRemoteMinutes: number; releasableRemoteMinutes?: number; projectedReleasedRemoteMinutes?: number; remoteCountsAfterMinimum: true} | null;
+  officeMinimum?: {requiredMinutes: number; currentMinutes: number; remainingMinutes: number; satisfied: boolean; projectedMinutes: number; projectedSatisfied: boolean; deferredRemoteMinutes: number; releasableRemoteMinutes?: number; forecastReleasedRemoteMinutes?: number; forecastReleaseDate?: string; remoteCountsAfterMinimum: true} | null;
   projectedPayBasis?: 'recommendation';
   accounting?: {targetEligibleMinutes?: number; currentTargetEligibleMinutes?: number; excludedUnknownMinutes?: number; deferredRemoteMinutes?: number; currentExcludedUnknownMinutes?: number; currentDeferredRemoteMinutes?: number};
   projectedOverFixedMinutes?: number; projectedExtraPayPreTaxKrw?: number; projectedExtraPayAfterTaxKrw?: number;
@@ -169,6 +170,9 @@ export function planState(plan: Plan, payload?: MonthPayload) {
     eligible != null && remote > 0 ? `재택 ${fmt(remote)} 보류` : undefined,
   );
   const reasons = plan.capacity?.limits.map(limit => limit.label).filter(Boolean).join(' · ');
+  const limits = plan.capacity?.limits ?? [];
+  const officeCapacityFinal = limits.some(limit => limit.kind === 'no_slots') || (limits.length > 0
+    && limits.every(limit => limit.kind !== 'daily_max' && limit.kind !== 'core_time' || limit.kind === 'daily_max' && payload?.planner?.settings?.longDayMinutes === 719));
   const forecastUnknown = accounting?.excludedUnknownMinutes ?? unknown;
   const forecastRemote = minimum?.releasableRemoteMinutes ?? accounting?.deferredRemoteMinutes ?? minimum?.deferredRemoteMinutes ?? 0;
   const officeGap = minimum ? Math.max(0, minimum.requiredMinutes - (plan.capacity?.maxOfficeMinutes ?? minimum.projectedMinutes)) : 0;
@@ -176,7 +180,7 @@ export function planState(plan: Plan, payload?: MonthPayload) {
   const policy = officeBlocked
     ? `사무실 최소 ${fmt(minimum.requiredMinutes)} 중 현재 ${fmt(minimum.remainingMinutes)} 남음 · 재택 ${fmt(forecastRemote)}은 최소 기준 충족 후 산입`
     : undefined;
-  const officeAction = officeBlocked
+  const officeAction = officeBlocked && !officeCapacityFinal
     ? `남은 일정과 근무 상한을 확인하세요. 현재 최대 배정보다 사무실 근무를 ${fmt(officeGap)} 더 늘려야 합니다.`
     : undefined;
   if (plan.status === 'infeasible_locked_target' || (plan.conflictReason && plan.status !== 'infeasible_mandatory_attendance')) {
@@ -187,8 +191,8 @@ export function planState(plan: Plan, payload?: MonthPayload) {
   }
   if (maximumGap > 0) {
     const checkUnknown = forecastUnknown >= maximumGap;
-    const checkOffice = officeBlocked && forecastRemote >= maximumGap;
-    const mixed = !checkUnknown && !checkOffice && officeBlocked && forecastUnknown > 0 && forecastUnknown + forecastRemote >= maximumGap;
+    const checkOffice = officeBlocked && !officeCapacityFinal && forecastRemote >= maximumGap;
+    const mixed = !checkUnknown && !checkOffice && officeBlocked && !officeCapacityFinal && forecastUnknown > 0 && forecastUnknown + forecastRemote >= maximumGap;
     if (checkUnknown || checkOffice || mixed) {
       const dates = (payload?.days || []).filter(day => (day.unknown_minutes || 0) > 0).map(day => {
         const forms = day.notes?.flatMap(note => {
@@ -221,13 +225,18 @@ export function planState(plan: Plan, payload?: MonthPayload) {
         : possible < recommendation
           ? `추천표 예상 ${fmt(recommendation)} · 현재 남은 시간으로 최대 ${fmt(possible)} · 목표 ${fmt(plan.targetMinutes)}까지 ${fmt(maximumGap)} 모자람`
           : `추천표 기준 ${fmt(recommendation)} · 목표 ${fmt(plan.targetMinutes)}까지 ${fmt(maximumGap)} 모자람`;
+    const fallback = maximumGap > 0 && officeBlocked && officeCapacityFinal ? possible : possible >= recommendation ? recommendation : 0;
     return {label: maximumGap > 0 ? '목표 도달 불가' : '오늘 추가 근무 필요', warning: true, message,
       hint: join(reasons || '남은 근무일과 근무 상한을 확인하세요.', policy, officeAction, unknown + remote > 0 ? basis : undefined),
-      actionTarget: possible >= recommendation && recommendation > 0 && recommendation < (plan.targetMinutes ?? 0) ? recommendation : undefined};
+      actionTarget: fallback > 0 && fallback < (plan.targetMinutes ?? 0) ? fallback : undefined};
   }
-  const released = minimum?.projectedReleasedRemoteMinutes ?? 0;
+  const released = minimum?.forecastReleasedRemoteMinutes ?? 0;
   return {label: plan.status === 'satisfied' ? '충족' : '가능', warning: false, message: basis,
-    hint: released > 0 ? `추천표의 사무실 근무로 최소 기준을 채우면 재택 ${fmt(released)}도 목표에 산입됩니다.` : policy || ''};
+    hint: released > 0 && minimum
+      ? (plan.futureTimeoffMinutes ?? 0) >= minimum.remainingMinutes
+        ? `예정된 유급휴가만으로도 사무실 최소 기준을 채워 재택 ${fmt(released)}을 목표에 산입할 수 있습니다.`
+        : `추천표의 사무실 근무로 최소 기준을 채우면 재택 ${fmt(released)}도 목표에 산입됩니다.`
+      : policy || ''};
 }
 export const todayIso = () => {
   const d = nowDate();

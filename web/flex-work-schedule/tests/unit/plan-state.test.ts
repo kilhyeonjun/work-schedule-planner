@@ -35,11 +35,13 @@ test('today guidance treats only physical office time as extra work', () => {
 });
 
 test('a forecast that already credits remote does not blame the office minimum for a shortfall', () => {
-  const plan = {...unmet, officeMinimum: {...office, projectedMinutes: 500, projectedSatisfied: true, projectedReleasedRemoteMinutes: 100}};
+  const plan = {...unmet, officeMinimum: {...office, projectedMinutes: 500, projectedSatisfied: true, forecastReleasedRemoteMinutes: 100}};
   assert.equal(planState(plan, payload).label, '목표 도달 불가');
   const state = planState({...plan, status: 'planned', gapMinutes: 0, forecastMinutes: 540}, payload);
   assert.equal(state.warning, false);
   assert.match(state.hint, /재택 1:40도 목표에 산입/);
+  const leave = planState({...plan, status: 'planned', gapMinutes: 0, forecastMinutes: 540, futureTimeoffMinutes: 200}, payload);
+  assert.match(leave.hint, /예정된 유급휴가만으로도.*재택 1:40/);
 });
 
 test('hard conflicts take priority and invalid fallback targets are never offered', () => {
@@ -48,4 +50,14 @@ test('hard conflicts take priority and invalid fallback targets are never offere
   const noSlots = planState({status: 'insufficient_slots', targetMinutes: 540, gapMinutes: 540, forecastMinutes: 0});
   assert.equal(noSlots.label, '목표 도달 불가');
   assert.equal(noSlots.actionTarget, undefined);
+});
+
+test('final office capacity offers the possible target, not an impossible office action', () => {
+  for (const kind of ['no_slots', 'weekly_max', 'date_override'] as const) {
+    const state = planState({...unmet, capacity: {planForecastMinutes: 450, maxForecastMinutes: 440, maxOfficeMinutes: 440,
+      shortfallMinutes: 100, limits: [{kind, dates: [], label: '남은 여유 없음'}]}}, payload);
+    assert.equal(state.label, '목표 도달 불가');
+    assert.equal(state.actionTarget, 440);
+    assert.doesNotMatch(state.hint, /사무실 근무를 .* 더 늘려야/);
+  }
 });
