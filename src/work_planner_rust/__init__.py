@@ -54,8 +54,17 @@ def call(op: str, **args):
             root = Path(__file__).resolve().parents[2]
             binary = os.environ.get("WORK_PLANNER_RUST_BIN")
             if binary is None:
-                release = root / "target" / "release" / "work-planner-cli"
-                binary = str(release if release.is_file() else root / "target" / "debug" / "work-planner-cli")
+                for profile in ("release", "debug"):
+                    candidate = root / "target" / profile / "work-planner-cli"
+                    if candidate.is_file():
+                        binary = str(candidate)
+                        break
+                else:
+                    raise FileNotFoundError(
+                        "Build the Rust planner CLI with "
+                        "`cargo build --release --features python-parity --bin work-planner-cli` "
+                        "or set WORK_PLANNER_RUST_BIN to a built CLI."
+                    )
             _process = subprocess.Popen(
                 [binary], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                 text=True, encoding="utf-8", bufsize=1,

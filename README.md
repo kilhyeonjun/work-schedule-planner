@@ -20,7 +20,7 @@ This is an engineering demonstration, not legal, payroll, or compliance advice, 
 
 ```bash
 uv sync --extra dev
-cargo build --release --bin work-planner-cli
+cargo build --release --features python-parity --bin work-planner-cli
 uv run pytest -q
 uvx ruff==0.16.0 check .
 uv run python scripts/generate_scenarios.py --check
@@ -44,8 +44,10 @@ cargo test
 
 The separate `work_planner_rust` transport package owns environment selection and
 the local JSON-line subprocess. The pure core modules retain their existing
-network/environment/home-access boundary. `WORK_PLANNER_RUST_BIN` can select an
-explicit CLI path; otherwise the transport prefers `target/release/work-planner-cli`
+network/environment/home-access boundary. The CLI requires `python-parity`,
+which enables arbitrary-precision JSON numbers without enabling them for
+library consumers by default. `WORK_PLANNER_RUST_BIN` can select an explicit
+path to that CLI; otherwise the transport prefers `target/release/work-planner-cli`
 and then `target/debug/work-planner-cli`. It never builds or silently falls back.
 All existing public imports remain valid, including direct module imports.
 The demo facade retains its observable Python LRU cache and passes its computed
