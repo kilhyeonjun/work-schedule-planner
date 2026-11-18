@@ -52,15 +52,26 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
   const last = actualPts[actualPts.length - 1];
 
   const projPts: {day: number; cum: number}[] = [];
-  if (isCurMonth && last && plan?.days?.length) {
-    let c = last.cum;
-    projPts.push(last);
-    const recommendations = new Map(plan.days.map(day => [day.date, day.plannedAdditionalMinutes ?? day.plannedMinutes ?? 0]));
-    const dates = [...new Set([...days.map(day => day.date), ...recommendations.keys()])].sort();
-    for (const date of dates) {
-      if (date < today) continue;
-      c += (recommendations.get(date) || 0) + (date > today ? days.find(day => day.date === date)?.recognized_minutes || 0 : 0);
-      projPts.push({day: Number(date.slice(8, 10)), cum: c});
+  const targetProjection = plan?.forecastMinutes != null && plan.accounting?.currentTargetEligibleMinutes != null;
+  if (isCurMonth && last && plan) {
+    const releaseDate = plan.officeMinimum?.forecastReleaseDate;
+    const released = plan.officeMinimum?.forecastReleasedRemoteMinutes ?? 0;
+    const recommendations = new Map((plan.days ?? []).map(day => [day.date, day.plannedAdditionalMinutes ?? day.plannedMinutes]));
+    if (recommendations.size || releaseDate) {
+      const leave = new Map(days.filter(day => day.date > today).map(day => [day.date,
+        targetProjection ? day.timeoff_minutes ?? 0 : day.recognized_minutes ?? 0]));
+      const dates = [...new Set([today, ...leave.keys(), ...recommendations.keys(), ...(releaseDate ? [releaseDate] : [])])].sort();
+      let c = last.cum;
+      if (targetProjection && plan.forecastMinutes != null) {
+        c = plan.forecastMinutes - released;
+        for (const date of dates) if (date >= today) c -= (recommendations.get(date) ?? 0) + (leave.get(date) ?? 0);
+      }
+      projPts.push({day: last.day, cum: c});
+      for (const date of dates) {
+        if (date < today) continue;
+        c += (recommendations.get(date) ?? 0) + (leave.get(date) ?? 0) + (targetProjection && date === releaseDate ? released : 0);
+        projPts.push({day: Number(date.slice(8, 10)), cum: c});
+      }
     }
   }
 
@@ -117,7 +128,7 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
             <span className="an-t">누적 인정 추이 · {year}-{pad(month)}</span>
             <span className="an-sum">
               <b>{fmt(recognized)}</b>&nbsp;/&nbsp;{fmt(selTarget)}&nbsp;·&nbsp;달성&nbsp;<b>{pct}%</b>
-              &nbsp;·&nbsp;남은 실제 근무&nbsp;<b>{fmt(remaining)}</b>&nbsp;·&nbsp;근무일&nbsp;<b>{workedRows.length}일</b>
+              &nbsp;·&nbsp;계산상 남은 근무&nbsp;<b>{fmt(remaining)}</b>&nbsp;·&nbsp;근무일&nbsp;<b>{workedRows.length}일</b>
             </span>
           </div>
           <div className="an-card-b">
@@ -182,7 +193,7 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
             <div className="an-legend">
               <span className="is-cum"><i />누적 인정</span>
               {selTarget > 0 && <span className="is-pace"><i />선택 목표 페이스</span>}
-              {projPts.length > 1 && <span className="is-proj"><i />계획 투영</span>}
+              {projPts.length > 1 && <span className="is-proj"><i />{targetProjection ? '목표 산입 투영' : '인정 기준 계획 투영'}</span>}
               {fixedOt > 0 && <span className="is-ot"><i />고정OT {fmt(fixedOt)}</span>}
               {goal > 0 && <span className="is-goal"><i />목표 {fmt(goal)}</span>}
             </div>
@@ -206,7 +217,7 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
                 <div className="an-cmp">
                   {comparisons.map(c => {
                     const isSel = c.targetMinutes === selTarget;
-                    const state = planState({...c, status: c.status || c.feasibility?.status, accounting: plan?.accounting}, payload);
+                    const state = isSel && plan ? planState(plan, payload) : planState({...c, status: c.status || c.feasibility?.status, accounting: plan?.accounting}, payload);
                     const warn = state.warning;
                     const pay = c.projectedExtraPayAfterTaxKrw || 0;
                     const longDays = c.summary?.longDays || 0;

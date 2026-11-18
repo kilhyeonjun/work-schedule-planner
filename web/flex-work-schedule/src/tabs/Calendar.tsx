@@ -113,7 +113,7 @@ export function CalendarTab(props: TabProps) {
   const remainingTotal = Number(planResult?.remainingMinutes || 0);
   const forecastTotal = planResult?.forecastMinutes ?? ((planResult?.recognizedMinutes || 0) + planTotal);
   const state = planResult ? planState(planResult, displayedPayload) : null;
-  const nextPlan = (displayedPayload.planner?.plan?.days || []).find(p => p.date > today && (p.plannedMinutes || 0) > 0);
+  const nextPlan = (planResult?.days || []).find(p => p.date > today && (p.plannedAdditionalMinutes ?? p.plannedMinutes) > 0);
 
   const renderCell = (c: CellInfo) => {
     if (c.state === 'out') {
@@ -151,7 +151,7 @@ export function CalendarTab(props: TabProps) {
           <span className="cal-vchip mono"><span className="cal-vchip__t">휴가 {fmt(c.row!.timeoff_minutes)}</span></span>
         )}
         {c.state === 'plan' && !hybrid && <span className="cal-kind">{c.plan?.isDateOverride ? `날짜 고정 · ${c.plan.window}` : kindLabel(c.plan?.kind)}</span>}
-        {hybrid && <span className="cal-kind">{isToday ? '진행 중' : '휴가 + 근무'} · {c.plan?.isDateOverride ? `날짜 고정 · ${c.plan.window}` : kindLabel(c.plan?.kind)}</span>}
+        {hybrid && <span className="cal-kind">{isToday ? c.row?.is_ongoing ? '진행 중' : '실적 + 계획' : '휴가 + 근무'} · {c.plan?.isDateOverride ? `날짜 고정 · ${c.plan.window}` : kindLabel(c.plan?.kind)}</span>}
         {offLabel ? <span className="cal-cell__off mono">{offLabel}</span> : null}
         {hybrid ? (
           <span className="cal-cell__hybrid mono">
@@ -224,8 +224,8 @@ export function CalendarTab(props: TabProps) {
       setPreviewToken(action === 'preview' ? String(body.previewToken || '') : '');
       setPreviewedMinutes(action === 'preview' ? editingMinutes : undefined);
       setOverrideState('success');
-      const incomplete = Number(body.gapMinutes || 0) > 0;
-      setOverrideMessage(incomplete ? `미리보기 결과: 목표 미달 ${fmt(Number(body.gapMinutes))} · ${body.reason || '제약 확인 필요'}` : action === 'preview' ? '미리보기 완료 · 저장 전까지 Flex에는 기록되지 않습니다.' : action === 'save' ? '로컬 계획을 저장했습니다. Flex에는 기록되지 않습니다.' : '이 날짜만 기본 계획으로 되돌렸습니다.');
+      const completion = action === 'preview' ? '미리보기 완료 · 저장 전까지 Flex에는 기록되지 않습니다.' : action === 'save' ? '로컬 계획을 저장했습니다. Flex에는 기록되지 않습니다.' : '이 날짜만 기본 계획으로 되돌렸습니다.';
+      setOverrideMessage(Number(body.gapMinutes) > 0 ? `${completion} · 추천표 기준 ${fmt(Number(body.gapMinutes))} 부족` : completion);
     } catch (error) {
       if (controller.signal.aborted) return;
       setOverrideState('error');
@@ -251,7 +251,7 @@ export function CalendarTab(props: TabProps) {
           <div className="cal-card__h">
             <span className="cal-card__t">{md(selectedDate)} {weekday} · 상세</span>
             <span className="cal-card__sum">
-              {detailHybrid ? <Chip className="chip--indigo">{selectedDate === today ? '진행 중' : '휴가 + 근무'}</Chip> : detailDone ? <Chip className="chip--ok">확정</Chip> : <Chip className="chip--indigo">계획</Chip>}
+              {detailHybrid ? <Chip className="chip--indigo">{selectedDate === today ? selRow?.is_ongoing ? '진행 중' : '실적 + 계획' : '휴가 + 근무'}</Chip> : detailDone ? <Chip className="chip--ok">확정</Chip> : <Chip className="chip--indigo">계획</Chip>}
               <button className="cal-detail__close" onClick={() => setSelectedDate(undefined)} aria-label="상세 닫기">×</button>
             </span>
           </div>
@@ -356,7 +356,7 @@ export function CalendarTab(props: TabProps) {
                     )}
                     <div className="cal-override__summary mono">계산 {fmt(editingMinutes)} · {locked ? '이 날짜 고정' : '이전/선호값: 목표 맞추기에 사용 (최종 배정 보장 안 함)'}{editMode === 'window' && ` · ${startTime}–${endTime} · 휴게 ${breakMinutes}분`}</div>
                     {editingMinutes === 0 && !locked && <span className="is-error" role="alert">휴무 0은 고정만 가능합니다.</span>}
-                    {previewResult && <div className="cal-override__summary mono" aria-live="polite">고정 상태 {previewResult.selectedLocked ? '고정' : '목표 맞추기'} · 목표 {fmt(previewResult.targetMinutes)} · 계획 {fmt(previewResult.plannedTotalMinutes)} · 갭 {fmt(previewResult.gapMinutes)}{previewResult.reason && ` · ${previewResult.reason}`}{(previewResult.adjustments || []).map(item => <span key={item.date}><br />{md(item.date)} {fmt(item.beforeMinutes)} → {fmt(item.afterMinutes)}</span>)}</div>}
+                    {previewResult && <div className="cal-override__summary mono" aria-live="polite">고정 상태 {previewResult.selectedLocked ? '고정' : '목표 맞추기'} · 목표 {fmt(previewResult.targetMinutes)} · 계획 {fmt(previewResult.plannedTotalMinutes)}{Number(previewResult.gapMinutes) > 0 && ` · 추천표 기준 ${fmt(previewResult.gapMinutes)} 부족`}{previewResult.reason && ` · ${previewResult.reason}`}{(previewResult.adjustments || []).map(item => <span key={item.date}><br />{md(item.date)} {fmt(item.beforeMinutes)} → {fmt(item.afterMinutes)}</span>)}</div>}
                     {!validOverride && <span className="is-error" role="alert">휴무(0)는 고정만 가능하며, 근무는 4:45–11:59, 출근 11:00 이전·퇴근 16:00 이후여야 합니다.</span>}
                     <div className="cal-override__actions">
                       <button type="button" onClick={() => overrideRequest('preview')} disabled={overrideState === 'loading' || !validOverride}>미리보기</button>
@@ -388,10 +388,10 @@ export function CalendarTab(props: TabProps) {
           <div className="cal-metrics mono">
             <span><i>현재 실근무</i><b>{fmt(actualTotal)}</b></span>
             <span><i>현재 인정</i><b>{fmt(recognizedTotal)}</b></span>
-            {planResult?.accounting?.currentTargetEligibleMinutes != null && <span><i>목표 산입</i><b>{fmt(planResult.accounting.currentTargetEligibleMinutes)}</b></span>}
+            {planResult?.accounting?.currentTargetEligibleMinutes != null && <span><i>현재 목표 산입</i><b>{fmt(planResult.accounting.currentTargetEligibleMinutes)}</b></span>}
             {planResult && hasInProgressRecognition && <span><i>Flex 월 집계</i><b>{fmt(sourceRecognized)}</b><small>집계 반영 대기 <b>+{fmt(inProgressRecognized)}</b></small></span>}
-            {planResult && <span><i>남은 실제 근무</i><b>{fmt(remainingTotal)}</b></span>}
-            {planResult && <span className={forecastTotal === Number(planResult.targetMinutes || 0) ? 'is-ok' : ''}><i>목표 산입 예상</i><b>{fmt(forecastTotal)}</b></span>}
+            {planResult && <span><i>계산상 남은 근무</i><b>{fmt(remainingTotal)}</b></span>}
+            {planResult && <span className={forecastTotal >= Number(planResult.targetMinutes) && !state?.warning ? 'is-ok' : ''}><i>추천표 기준 목표 산입</i><b>{fmt(forecastTotal)}</b></span>}
           </div>
           {state && <div className={`plan-feas ${state.warning ? 'plan-feas--warn' : ''}`} role={state.warning ? 'alert' : 'status'}>
             <span className="plan-feas__st">{state.label}</span><span>{state.message}</span>{state.hint && <span>{state.hint}</span>}
@@ -437,7 +437,7 @@ export function CalendarTab(props: TabProps) {
           <div className="cal-next" style={kindVar(nextPlan.kind)}>
             <span className="cal-next__nk">다음 일정</span>
             <span className="cal-next__nd"><b className="mono">{md(nextPlan.date)}</b> {nextPlan.weekday} · {kindLabel(nextPlan.kind)}</span>
-            <span className="cal-next__nv mono">{nextPlan.window}&nbsp;&nbsp;<span className="cal-next__add">+{fmt(nextPlan.plannedMinutes)}</span></span>
+            <span className="cal-next__nv mono">{nextPlan.window}&nbsp;&nbsp;<span className="cal-next__add">+{fmt(nextPlan.plannedAdditionalMinutes ?? nextPlan.plannedMinutes)}</span></span>
           </div>
         )}
       </div>

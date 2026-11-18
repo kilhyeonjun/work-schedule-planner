@@ -213,7 +213,7 @@ export function TodayTab(props: TabProps) {
               </div>
               <div className="today-month__stats">
                 <div><div className="today-month__k">현재 인정</div><div className="mono today-month__v is-acc">{fmt(recognized)}</div></div>
-                <div><div className="today-month__k">남은 실제 근무</div><div className="mono today-month__v">{fmt(plan?.remainingMinutes)}</div></div>
+                <div><div className="today-month__k">계산상 남은 근무</div><div className="mono today-month__v">{fmt(plan?.remainingMinutes)}</div></div>
                 <div><div className="today-month__k">목표</div><div className="mono today-month__v">{fmt(target)}</div></div>
               </div>
             </div>

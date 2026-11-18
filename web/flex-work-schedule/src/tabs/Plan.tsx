@@ -16,6 +16,8 @@ export function PlanTab({payload, loading, selected, setTarget, settings}: TabPr
   const planner = displayed.planner;
   if (!planner?.plan) return null;
   const plan = planner.plan;
+  const releaseDate = plan.officeMinimum?.forecastReleaseDate;
+  const releasedRemote = plan.officeMinimum?.forecastReleasedRemoteMinutes ?? 0;
   const days = (plan.days || []).filter(day => day.plannedMinutes > 0 || day.currentWorkedMinutes || day.isDateOverride);
   const weeks = plan.summary?.weekly || [];
   const state = planState(plan, displayed);
@@ -25,8 +27,15 @@ export function PlanTab({payload, loading, selected, setTarget, settings}: TabPr
   const rest = days.filter(day => !grouped.has(day.date));
   if (rest.length) groups.push({key: 'remaining', label: '남은 일정', projected: rest.reduce((sum, day) => sum + (day.plannedAdditionalMinutes ?? day.plannedMinutes), 0), limit: 3120, days: rest});
   let cumulative = plan.recognizedMinutes || 0;
+  const todayContribution = plan.plannedTotalMinutes == null ? undefined : plan.plannedTotalMinutes
+    - days.reduce((sum, day) => sum + (day.isToday ? 0 : day.plannedAdditionalMinutes ?? day.plannedMinutes), 0);
+  let releasePending = Boolean(releaseDate && releasedRemote > 0);
   const totals = new Map(days.map(day => {
-    cumulative += day.isToday ? day.plannedMinutes : day.plannedAdditionalMinutes ?? day.plannedMinutes;
+    cumulative += day.isToday ? todayContribution ?? day.plannedMinutes : day.plannedAdditionalMinutes ?? day.plannedMinutes;
+    if (releasePending && releaseDate && day.date >= releaseDate) {
+      cumulative += releasedRemote;
+      releasePending = false;
+    }
     return [day.date, cumulative];
   }));
   const currentWeek = Math.max(0, weeks.findIndex(week => week.dates?.includes(todayIso())));
@@ -44,7 +53,7 @@ export function PlanTab({payload, loading, selected, setTarget, settings}: TabPr
         <span className="muted">추천표 기준 세후 +{krw(comparison.projectedExtraPayAfterTaxKrw)}원 · 긴 날 {comparison.summary?.longDays || 0}회 · {comparison.effortLabel}</span>
         {(comparison.gapMinutes || comparison.capacity?.shortfallMinutes || 0) > 0 && <span>최대 {fmt(comparison.capacity?.maxForecastMinutes ?? comparison.feasibility?.possibleTargetMinutes ?? (comparison.targetMinutes - (comparison.gapMinutes || 0)))}까지 가능</span>}
       </button>)}</div>
-      <div className="plan-summary"><span className="chip">{state.label}</span><span>남은 실제 근무 <b>{fmt(plan.remainingMinutes)}</b> · 계획 <b>{fmt(plan.plannedTotalMinutes)}</b> · 목표 산입 예상 <b>{fmt(plan.forecastMinutes ?? ((plan.recognizedMinutes || 0) + (plan.plannedTotalMinutes || 0)))}</b></span></div>
+      <div className="plan-summary"><span className="chip">{state.label}</span><span>계산상 남은 근무 <b>{fmt(plan.remainingMinutes)}</b> · 계획 <b>{fmt(plan.plannedTotalMinutes)}</b> · 추천표 기준 목표 산입 <b>{fmt(plan.forecastMinutes ?? ((plan.recognizedMinutes || 0) + (plan.plannedTotalMinutes || 0)))}</b></span></div>
       {(plan.inProgressRecognizedMinutes || 0) > 0 && <p className="muted">Flex 월 집계 {fmt(plan.sourceRecognizedMinutes)} · 집계 반영 대기 +{fmt(plan.inProgressRecognizedMinutes)}</p>}
     </Card>
     <OfficeMinimum payload={displayed} />
@@ -56,6 +65,7 @@ export function PlanTab({payload, loading, selected, setTarget, settings}: TabPr
     <div className="plan-layout"><Card className="plan-schedule">
       <div className="row row--between"><h2>추천 근무표</h2><span className="muted">계획 합계 {fmt(plan.plannedTotalMinutes)} · 주말·휴무 숨김</span></div>
       <p className="muted">현재 인정 {fmt(currentRecognized(displayed))}{plan.accounting?.currentTargetEligibleMinutes != null && ` · 목표 산입 ${fmt(plan.accounting.currentTargetEligibleMinutes)}`} · 행을 누르면 다른 근무 길이의 월 영향을 확인합니다</p>
+      {!releasePending && releaseDate && releasedRemote > 0 && !totals.has(releaseDate) && <p className="muted">{releaseDate} 사무실 최소 기준 충족 · 재택 {fmt(releasedRemote)} 목표 산입</p>}
       {groups.map(group => <section className="schedule-week" key={group.key}>
         <button className="schedule-week__toggle" aria-expanded={isOpen(group.key)} onClick={() => toggle(group.key)}><b>{group.label}</b><span>{fmt(group.projected)} / {fmt(group.limit)}</span><span aria-hidden="true">{isOpen(group.key) ? '⌃' : '⌄'}</span></button>
         {isOpen(group.key) && <div className="schedule-rows"><div className="schedule-head"><span>날짜</span><span>구분</span><span>추천 출퇴근</span><span>추가 / 실적 / 휴가</span><span>누적 목표 산입</span></div>
@@ -67,6 +77,7 @@ export function PlanTab({payload, loading, selected, setTarget, settings}: TabPr
           {!group.days.length && <p className="muted">남은 배치 없음</p>}
         </div>}
       </section>)}
+      {releasePending && <p className="plan-buffer">{releaseDate} 사무실 최소 기준 충족 · 재택 +{fmt(releasedRemote)} · 누적 목표 산입 <b>{fmt(cumulative + releasedRemote)}</b></p>}
       {planner.strategy?.bufferDate && <p className="plan-buffer">조정 버퍼 {planner.strategy.bufferDate} · 실적에 따라 자동 재산정</p>}
     </Card><div className="plan-side"><Card className="plan-method">
       <h2>방식</h2><p className="muted">{planner.strategy?.title}</p><p>{planner.strategy?.message}</p>
