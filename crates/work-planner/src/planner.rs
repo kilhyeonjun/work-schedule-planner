@@ -18,19 +18,20 @@ fn water_fill(
 ) -> i64 {
     while remaining > 0 {
         let selected = month
-            .days
+            .days()
             .iter()
             .enumerate()
             .filter(|(i, d)| {
                 allowed.is_none_or(|a| a.contains(i))
                     && allocated[*i] < caps[*i]
                     && (minimum_additional_work(d) == 0 || activated[*i])
-                    && *weekly.get(&d.week_key).unwrap_or(&0) < month.policy.weekly_limit_minutes
+                    && *weekly.get(&d.week_key).unwrap_or(&0)
+                        < month.policy().weekly_limit_minutes()
             })
             .min_by(|(i, a), (j, b)| {
                 let left = a.recognized_minutes + allocated[*i];
                 let right = b.recognized_minutes + allocated[*j];
-                let order = if month.policy.allocation_mode == "capacity_weighted" {
+                let order = if month.policy().allocation_mode() == "capacity_weighted" {
                     (i128::from(left) * i128::from(caps[*j]))
                         .cmp(&(i128::from(right) * i128::from(caps[*i])))
                 } else {
@@ -43,7 +44,7 @@ fn water_fill(
             break;
         };
         allocated[index] += 1;
-        let week = &month.days[index].week_key;
+        let week = &month.days()[index].week_key;
         if let Some(total) = weekly.get_mut(week) {
             *total += 1;
         } else {
@@ -64,15 +65,17 @@ fn balance_key(
     amount: i64,
     selected: &[usize],
 ) -> BalanceKey {
-    let mut allocated = vec![0; month.days.len()];
+    let mut allocated = vec![0; month.days().len()];
     let mut simulated = weekly.clone();
-    let mut activated = vec![false; month.days.len()];
+    let mut activated = vec![false; month.days().len()];
     let mut remaining = amount;
     for &i in selected {
         activated[i] = true;
-        let minimum = minimum_additional_work(&month.days[i]);
+        let minimum = minimum_additional_work(&month.days()[i]);
         allocated[i] = minimum;
-        *simulated.entry(month.days[i].week_key.clone()).or_default() += minimum;
+        *simulated
+            .entry(month.days()[i].week_key.clone())
+            .or_default() += minimum;
         remaining -= minimum;
     }
     remaining = water_fill(
@@ -88,7 +91,7 @@ fn balance_key(
         .iter()
         .copied()
         .filter(|&i| caps[i] > 0)
-        .map(|i| month.days[i].recognized_minutes + allocated[i])
+        .map(|i| month.days()[i].recognized_minutes + allocated[i])
         .collect();
     let distance = days
         .iter()
@@ -121,8 +124,8 @@ fn minimum_activation(
     weekly: &BTreeMap<String, i64>,
     target: i64,
 ) -> Result<(i64, Vec<bool>)> {
-    let count = month.days.len();
-    if !month.days.iter().any(|d| minimum_additional_work(d) > 0) {
+    let count = month.days().len();
+    if !month.days().iter().any(|d| minimum_additional_work(d) > 0) {
         return Ok((target, vec![false; count]));
     }
     let mut preferred = vec![0; count];
@@ -136,22 +139,23 @@ fn minimum_activation(
         None,
     );
     let mut grouped: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
-    for (i, d) in month.days.iter().enumerate() {
+    for (i, d) in month.days().iter().enumerate() {
         grouped.entry(&d.week_key).or_default().push(i);
     }
     let mut weeks = Vec::new();
     for (week, days) in grouped {
-        let capacity = (month.policy.weekly_limit_minutes - weekly.get(week).unwrap_or(&0)).max(0);
+        let capacity =
+            (month.policy().weekly_limit_minutes() - weekly.get(week).unwrap_or(&0)).max(0);
         let free: i64 = days
             .iter()
-            .filter(|&&i| minimum_additional_work(&month.days[i]) == 0)
+            .filter(|&&i| minimum_additional_work(&month.days()[i]) == 0)
             .map(|&i| caps[i])
             .sum();
         let constrained: Vec<usize> = days
             .iter()
             .copied()
             .filter(|&i| {
-                let m = minimum_additional_work(&month.days[i]);
+                let m = minimum_additional_work(&month.days()[i]);
                 m > 0 && m <= caps[i]
             })
             .collect();
@@ -166,7 +170,7 @@ fn minimum_activation(
                 .collect();
             let minimum: i64 = selected
                 .iter()
-                .map(|&i| minimum_additional_work(&month.days[i]))
+                .map(|&i| minimum_additional_work(&month.days()[i]))
                 .sum();
             let maximum = capacity.min(free + selected.iter().map(|&i| caps[i]).sum::<i64>());
             if minimum > maximum || minimum > target {
@@ -236,26 +240,26 @@ fn minimum_activation(
     Ok((planned, activated))
 }
 fn allocate(month: &WorkMonth) -> Result<std::result::Result<Vec<i64>, Value>> {
-    for day in &month.days {
+    for day in month.days() {
         if day.availability.min_work_minutes > day.availability.max_work_minutes {
             return Ok(Err(
                 json!({"reason":"invalid_availability","date":day.date,"min_work_minutes":day.availability.min_work_minutes,"max_work_minutes":day.availability.max_work_minutes}),
             ));
         }
     }
-    let mut allocated = vec![0; month.days.len()];
-    let baseline: i64 = month.days.iter().map(|d| d.recognized_minutes).sum();
-    let requested = (month.target_minutes - baseline).max(0);
-    let mut weekly = weekly_work_baseline(&month.days);
+    let mut allocated = vec![0; month.days().len()];
+    let baseline: i64 = month.days().iter().map(|d| d.recognized_minutes).sum();
+    let requested = (month.target_minutes() - baseline).max(0);
+    let mut weekly = weekly_work_baseline(month.days());
     let actual = weekly.clone();
     let mut caps: Vec<i64> = month
-        .days
+        .days()
         .iter()
-        .map(|d| daily_additional_cap(d, &month.policy))
+        .map(|d| daily_additional_cap(d, month.policy()))
         .collect();
     let mut fixed_total = 0;
-    for (i, day) in month.days.iter().enumerate() {
-        if let Some(&fixed) = month.policy.date_overrides.get(&day.date) {
+    for (i, day) in month.days().iter().enumerate() {
+        if let Some(&fixed) = month.policy().date_overrides().get(&day.date) {
             let fixed = fixed - day.worked_minutes;
             if fixed < 0 || fixed > caps[i] {
                 return Err(Error::value(format!(
@@ -271,8 +275,8 @@ fn allocate(month: &WorkMonth) -> Result<std::result::Result<Vec<i64>, Value>> {
     }
     for (week, &projected) in &weekly {
         let limit = month
-            .policy
-            .weekly_limit_minutes
+            .policy()
+            .weekly_limit_minutes()
             .max(*actual.get(week).unwrap_or(&0));
         if projected > limit {
             return Ok(Err(
@@ -282,7 +286,7 @@ fn allocate(month: &WorkMonth) -> Result<std::result::Result<Vec<i64>, Value>> {
     }
     let (mut remaining, activated) =
         minimum_activation(month, &caps, &weekly, (requested - fixed_total).max(0))?;
-    for (i, day) in month.days.iter().enumerate() {
+    for (i, day) in month.days().iter().enumerate() {
         if !activated[i] {
             continue;
         }
@@ -306,14 +310,14 @@ pub fn plan_month(payload: &Value) -> Result<Value> {
     let month = parse_work_month(payload)?;
     let (allocated, infeasible) = match allocate(&month)? {
         Ok(a) => (a, None),
-        Err(e) => (vec![0; month.days.len()], Some(e)),
+        Err(e) => (vec![0; month.days().len()], Some(e)),
     };
-    let baseline: i64 = month.days.iter().map(|d| d.recognized_minutes).sum();
+    let baseline: i64 = month.days().iter().map(|d| d.recognized_minutes).sum();
     let additional: i64 = allocated.iter().sum();
     let projected = baseline + additional;
-    let gap = (month.target_minutes - projected).max(0);
-    let over = if !month.policy.date_overrides.is_empty() && additional > 0 {
-        (projected - month.target_minutes).max(0)
+    let gap = (month.target_minutes() - projected).max(0);
+    let over = if !month.policy().date_overrides().is_empty() && additional > 0 {
+        (projected - month.target_minutes()).max(0)
     } else {
         0
     };
@@ -321,21 +325,21 @@ pub fn plan_month(payload: &Value) -> Result<Value> {
         "infeasible"
     } else if over > 0 {
         "over_target"
-    } else if month.target_minutes <= baseline {
+    } else if month.target_minutes() <= baseline {
         "satisfied"
     } else if gap > 0 {
         "insufficient_slots"
     } else {
         "planned"
     };
-    let days: Vec<Value> = month.days.iter().zip(&allocated).map(|(d,&a)| {
-        let cap = daily_work_cap(d,&month.policy);
+    let days: Vec<Value> = month.days().iter().zip(&allocated).map(|(d,&a)| {
+        let cap = daily_work_cap(d,month.policy());
         json!({"date":d.date,"weekday":d.weekday,"week":d.week_key,"dayType":d.day_type,"workedMinutes":d.worked_minutes,"recognizedMinutes":d.recognized_minutes,"leaveMinutes":d.leave_minutes,"plannedAdditionalMinutes":a,"plannedWorkMinutes":d.worked_minutes+a,"projectedRecognizedMinutes":d.recognized_minutes+a,"dailyWorkCapMinutes":cap,"reasons":explain_day(d,a,cap)})
     }).collect();
     let constraints = if infeasible.is_some() {
         json!({})
     } else {
-        verify_constraints(&month.days, &month.policy, &allocated)
+        verify_constraints(month.days(), month.policy(), &allocated)
     };
     if constraints
         .as_object()
@@ -351,7 +355,7 @@ pub fn plan_month(payload: &Value) -> Result<Value> {
     } else {
         explain_result(status, gap)
     };
-    let mut result = json!({"dataOrigin":month.data_origin,"generator":month.generator,"period":month.period,"timezone":month.timezone,"algorithm":{"name":"deterministic-water-fill","version":"1"},"status":status,"targetMinutes":month.target_minutes,"recognizedBaselineMinutes":baseline,"plannedAdditionalMinutes":additional,"projectedRecognizedMinutes":projected,"gapMinutes":gap,"overTargetMinutes":over,"constraints":constraints,"explanation":explanation,"days":days});
+    let mut result = json!({"dataOrigin":month.data_origin(),"generator":month.generator(),"period":month.period(),"timezone":month.timezone(),"algorithm":{"name":"deterministic-water-fill","version":"1"},"status":status,"targetMinutes":month.target_minutes(),"recognizedBaselineMinutes":baseline,"plannedAdditionalMinutes":additional,"projectedRecognizedMinutes":projected,"gapMinutes":gap,"overTargetMinutes":over,"constraints":constraints,"explanation":explanation,"days":days});
     if let Some(e) = infeasible {
         result["infeasible"] = e;
     }

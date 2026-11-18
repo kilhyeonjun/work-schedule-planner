@@ -84,7 +84,7 @@ pub fn dispatch(request: &Value) -> Result<Value> {
             let p = json!({"dataOrigin":"synthetic","targetMinutes":0,"policy":{"weeklyLimitMinutes":0,"normalMinutes":0,"maxMinutes":0},"days":[input::item(a, "day")?.clone()]});
             let m = model::parse_work_month(&p)?;
             let day = m
-                .days
+                .days()
                 .first()
                 .ok_or_else(|| Error::value("a day is required"))?;
             Ok(json!(explain::explain_day(
