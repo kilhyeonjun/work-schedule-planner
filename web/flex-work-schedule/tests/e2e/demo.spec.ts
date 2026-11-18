@@ -895,6 +895,26 @@ test('November running total credits 12:28 only on the office threshold date', a
   await expect(page.locator('.plan-summary')).toContainText('추천표 기준 목표 산입 207:00');
 });
 
+test('schedule ends at the credited forecast when leave unlocks remote after the last work row', async ({page}) => {
+  await page.route('**/demo/api/month?**', async route => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.planner.plan = {
+      status: 'planned', targetMinutes: 800, recognizedMinutes: 400, plannedTotalMinutes: 300, forecastMinutes: 800,
+      futureTimeoffMinutes: 300,
+      officeMinimum: {requiredMinutes: 500, currentMinutes: 100, remainingMinutes: 400, projectedMinutes: 700,
+        satisfied: false, projectedSatisfied: true, deferredRemoteMinutes: 100, forecastReleasedRemoteMinutes: 100,
+        forecastReleaseDate: '2042-03-06', remoteCountsAfterMinimum: true},
+      days: [{date: '2042-03-05', kind: 'short', plannedMinutes: 300, plannedAdditionalMinutes: 300, window: '10:00–16:00'}],
+    };
+    await route.fulfill({response, json: body});
+  });
+  await page.goto('/demo/?tab=plan&target=800');
+  const schedule = page.locator('.plan-schedule');
+  await expect(schedule.getByRole('button', {name: '2042-03-05 가정 바꾸기'}).locator('b')).toHaveText('11:40');
+  await expect(schedule).toContainText('2042-03-06 사무실 최소 기준 충족 · 재택 +1:40 · 누적 목표 산입 13:20');
+});
+
 for (const scenario of [
   {unknown: 0, remote: 100, label: '사무실 근무 필요'},
   {unknown: 40, remote: 60, label: '자료·사무실 근무 확인'},
