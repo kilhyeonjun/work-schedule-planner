@@ -82,6 +82,15 @@ def test_malformed_projection_days_return_errors(oracle, value):
     transport.call("plan_month", payload=valid_input())
 
 
+def test_projection_compares_integer_dates_without_requiring_strings(oracle):
+    source = insight_payload()
+    constraints = canonical_constraints(source)
+    constraints["days"][2]["date"] = 20420305
+    result = insights(oracle, source, constraints)
+    assert result["forecast"]["maxMinutes"] is not None
+    assert result["leaveNow"] is not None
+
+
 @pytest.mark.parametrize("field", ["targetMinutes", "workedMinutes", "recognizedMinutes", "weeklyLimitMinutes"])
 @pytest.mark.parametrize("value", [MAX_MINUTES + 1, 2**63 - 1, 2**100, -(2**100)])
 def test_huge_minutes_are_rejected_consistently(oracle, field, value):

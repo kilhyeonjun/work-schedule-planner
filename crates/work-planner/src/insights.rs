@@ -200,8 +200,7 @@ fn constrained_projection(
         // Python always comprehends constraints["days"], even without leave_now.
         let mut days = Vec::new();
         for day in array(item(c, "days")?)? {
-            let d = required_string(day, "date")?;
-            if leave_now && d == today {
+            if leave_now && item(day, "date")? == today.as_str() {
                 let mut changed = input::object(day)?.clone();
                 let mut availability = input::object(item(day, "availability")?)?.clone();
                 availability.insert("available".into(), json!(false));
