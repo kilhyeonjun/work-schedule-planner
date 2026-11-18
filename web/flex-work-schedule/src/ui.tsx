@@ -27,7 +27,7 @@ export function OfficeMinimum({payload}: {payload?: MonthPayload | null}) {
     <h2>사무실 최소 기준</h2>
     <p>사무실·휴가 {fmt(minimum.currentMinutes)} / 최소 {fmt(minimum.requiredMinutes)} · {fmt(minimum.remainingMinutes)} 남음</p>
     <progress aria-label="사무실 최소 기준" value={minimum.currentMinutes} max={Math.max(1, minimum.requiredMinutes)} />
-    <p>재택 {fmt(minimum.deferredRemoteMinutes)}은 최소 기준을 채운 뒤 목표에 들어감</p>
+    {minimum.deferredRemoteMinutes > 0 && <p>재택 {fmt(minimum.deferredRemoteMinutes)}은 최소 기준을 채운 뒤 목표에 들어감</p>}
     <p className="muted">{minimum.projectedSatisfied ? `추천표대로면 ${reached || '월말'}에 충족` : `추천표대로도 월말에 ${fmt(Math.max(0, minimum.requiredMinutes - minimum.projectedMinutes))} 부족`}</p>
   </Card>;
 }

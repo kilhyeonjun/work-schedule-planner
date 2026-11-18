@@ -203,7 +203,7 @@ test('date override requires preview before local save and exposes reset', async
   await page.setViewportSize({width: 390, height: 844});
   let preview: MonthPayload;
   await page.route('**/demo/api/planner/overrides**', route => route.fulfill({
-    contentType: 'application/json', body: JSON.stringify({ok: true, localOnly: true, preview, previewToken: 'demo-preview', overrides: {}}),
+    contentType: 'application/json', body: JSON.stringify({ok: true, localOnly: true, preview, previewToken: 'demo-preview', overrides: {}, gapMinutes: 65}),
   }));
   const monthResponse = page.waitForResponse(response => response.url().includes('/demo/api/month?'));
   await page.goto('/demo/?tab=calendar');
@@ -228,6 +228,7 @@ test('date override requires preview before local save and exposes reset', async
   await expect(page.getByRole('button', {name: '로컬 저장'})).toBeEnabled();
   await page.getByRole('button', {name: '로컬 저장'}).click();
   await expect(page.getByText('로컬 계획을 저장했습니다. Flex에는 기록되지 않습니다.')).toBeVisible();
+  await expect(page.locator('.cal-detail')).toContainText('추천표 기준 1:05 부족');
   await page.getByRole('button', {name: '이 날짜 초기화'}).click();
   await expect(page.getByText('이 날짜만 기본 계획으로 되돌렸습니다.')).toBeVisible();
 });
@@ -238,12 +239,13 @@ test('today hybrid detail preserves actual, remaining, forecast, and recommendat
     const body = await response.json();
     const today = body.days.find((day: {date: string}) => day.date === '2042-03-04');
     const plan = body.planner.plan.days.find((day: {date: string}) => day.date === '2042-03-04');
-    Object.assign(today, {work_minutes: 531, recognized_minutes: 531, day_type: 'workday'});
+    Object.assign(today, {work_minutes: 531, recognized_minutes: 531, day_type: 'workday', is_ongoing: false});
     Object.assign(plan, {window: '06:40–17:44', plannedMinutes: 604, plannedAdditionalMinutes: 73});
     await route.fulfill({response, body: JSON.stringify(body)});
   });
   await page.goto('/demo/?year=2042&month=3&tab=calendar&selectedDate=2042-03-04');
   const detail = page.locator('.cal-detail');
+  await expect(detail.locator('.cal-card__h')).toContainText('실적 + 계획');
   await expect(detail.locator('.cal-progress')).toContainText('실적8:51');
   await expect(detail.locator('.cal-progress')).toContainText('남은 계획+1:13');
   await expect(detail.locator('.cal-progress')).toContainText('예상 합계10:04');
@@ -530,6 +532,7 @@ for (const scenario of [
       await expect(state.getByRole('button')).toHaveCount(0);
     }
     if (scenario.unknown) await expect(state).toContainText('미분류 2:00 제외');
+    if (scenario.unknown) await expect(state).toContainText('미분류 근무 형태 확인: 3/4 (2:00)');
     await page.locator('.sidebar__item', {hasText: '달력'}).click();
     await expect(page.locator('.plan-feas')).toContainText(scenario.label);
     await expect(page.locator('.cal-metrics')).toContainText(`현재 인정${hm(ledger)}`);
@@ -589,7 +592,7 @@ test('anchored today current eligibility is not the forecast starting balance', 
   });
   await page.goto('/demo/?tab=plan');
   await expect(page.locator('.plan-schedule')).toContainText('현재 인정 9:11 · 목표 산입 9:11');
-  await expect(page.locator('.plan-feas')).toContainText('현재 인정 9:11 중 목표 산입 9:11');
+  await expect(page.locator('.plan-feas')).toContainText('현재 인정 9:11 · 현재 목표 산입 9:11');
   await page.locator('.sidebar__item', {hasText: '달력'}).click();
   await expect(page.locator('.cal-metrics')).toContainText('목표 산입9:11');
 });
@@ -601,7 +604,7 @@ test('archive calendar has confirmed ledger without plan-only metrics', async ({
   await expect(metrics).toContainText('현재 인정');
   await expect(metrics.locator(':scope > span')).toHaveCount(2);
   await expect(metrics).not.toContainText('목표 산입');
-  await expect(metrics).not.toContainText('남은 실제 근무');
+  await expect(metrics).not.toContainText('계산상 남은 근무');
   await expect(page.locator('.cal-card__h .cal-card__sum')).toHaveCount(0);
 });
 
@@ -649,7 +652,7 @@ for (const change of ['date', 'target', 'payload']) {
     // Barrier: the delayed response has been attempted before inspecting state.
     await page.unrouteAll({behavior: 'wait'});
     await expect(page.getByRole('button', {name: '로컬 저장'})).toBeDisabled();
-    await expect(page.locator('.cal-metrics')).not.toContainText('목표 산입 예상0:01');
+    await expect(page.locator('.cal-metrics')).not.toContainText('추천표 기준 목표 산입0:01');
     await expect(page.getByText('미리보기 완료 · 저장 전까지 Flex에는 기록되지 않습니다.')).toHaveCount(0);
   });
 }
@@ -668,7 +671,7 @@ test('current remote deferral already credited by forecast does not explain capa
   });
   await page.goto('/demo/?tab=plan');
   await expect(page.locator('.plan-feas')).toContainText('목표 도달 불가');
-  await expect(page.locator('.plan-feas')).toContainText('현재 인정 10:00 중 목표 산입 7:00 · 재택 3:00 보류');
+  await expect(page.locator('.plan-feas')).toContainText('현재 인정 10:00 · 현재 목표 산입 7:00 · 재택 3:00 보류');
   await expect(page.getByRole('button', {name: '목표를 18:00로 맞추기'})).toBeVisible();
 });
 
@@ -831,6 +834,70 @@ test('classification exclusions cannot hide an exhausted-day capacity shortfall'
     await expect(state.getByRole('button')).toHaveCount(0);
   }
 });
+
+test('calendar credits deferred remote in the forecast, not in current recognition', async ({page}) => {
+  await page.route('**/demo/api/month?**', async route => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.truth = {current: {...body.truth?.current, effectiveRecognizedMinutes: 7691}};
+    body.planner.plan = {
+      status: 'planned', targetMinutes: 12420, remainingMinutes: 4729,
+      forecastMinutes: 12420, gapMinutes: 0, plannedTotalMinutes: 4729,
+      accounting: {currentTargetEligibleMinutes: 6943, currentExcludedUnknownMinutes: 0,
+        currentDeferredRemoteMinutes: 748, excludedUnknownMinutes: 0, deferredRemoteMinutes: 748},
+      officeMinimum: {requiredMinutes: 10080, currentMinutes: 6943, remainingMinutes: 3137,
+        satisfied: false, projectedMinutes: 11672, projectedSatisfied: true, deferredRemoteMinutes: 748,
+        projectedReleasedRemoteMinutes: 748, remoteCountsAfterMinimum: true},
+      capacity: {planForecastMinutes: 12420, maxForecastMinutes: 12420, maxOfficeMinutes: 11672, shortfallMinutes: 0, limits: []},
+      days: [{date: '2042-03-05', kind: 'normal', window: '06:40–16:00', plannedMinutes: 500, plannedAdditionalMinutes: 260}],
+    };
+    await route.fulfill({response, json: body});
+  });
+  await page.goto('/demo/?year=2042&month=3&tab=calendar&target=12420&normal=500&long=719&short=285');
+  const state = page.locator('.plan-feas');
+  await expect(state).toHaveAttribute('role', 'status');
+  await expect(state.locator('.plan-feas__st')).toHaveText('가능');
+  await expect(state).toContainText('현재 인정 128:11 · 현재 목표 산입 115:43 · 재택 12:28 보류');
+  await expect(state).toContainText('최소 기준을 채우면 재택 12:28도 목표에 산입');
+  await expect(state).not.toContainText('자료 확인 필요');
+  const metrics = page.locator('.cal-metrics');
+  await expect(metrics).toContainText('계산상 남은 근무78:49');
+  await expect(metrics).toContainText('추천표 기준 목표 산입207:00');
+  await expect(page.locator('.cal-next__add')).toHaveText('+4:20');
+});
+
+for (const scenario of [
+  {unknown: 0, remote: 100, label: '사무실 근무 필요'},
+  {unknown: 40, remote: 60, label: '자료·사무실 근무 확인'},
+]) {
+  test(`calendar explains an unmet office policy: ${scenario.label}`, async ({page}) => {
+    await page.route('**/demo/api/month?**', async route => {
+      const response = await route.fetch();
+      const body = await response.json();
+      body.truth = {current: {...body.truth?.current, effectiveRecognizedMinutes: 400}};
+      body.days = [{date: '2042-03-04', day_type: 'workday', work_minutes: 400, recognized_minutes: 400, unknown_minutes: scenario.unknown}];
+      body.planner.plan = {
+        status: 'insufficient_slots', targetMinutes: 510, remainingMinutes: 210,
+        forecastMinutes: 410, gapMinutes: 100, plannedTotalMinutes: 110,
+        accounting: {currentTargetEligibleMinutes: 300, currentExcludedUnknownMinutes: scenario.unknown,
+          currentDeferredRemoteMinutes: scenario.remote, excludedUnknownMinutes: scenario.unknown, deferredRemoteMinutes: scenario.remote},
+        officeMinimum: {requiredMinutes: 500, currentMinutes: 300, remainingMinutes: 200,
+          satisfied: false, projectedMinutes: 410, projectedSatisfied: false, deferredRemoteMinutes: scenario.remote, remoteCountsAfterMinimum: true},
+        capacity: {planForecastMinutes: 410, maxForecastMinutes: 420, maxOfficeMinutes: 420, shortfallMinutes: 90, limits: []},
+      };
+      await route.fulfill({response, json: body});
+    });
+    await page.goto('/demo/?tab=calendar');
+    const state = page.locator('.plan-feas');
+    await expect(state).toHaveAttribute('role', 'alert');
+    await expect(state.locator('.plan-feas__st')).toHaveText(scenario.label);
+    await expect(state).toContainText('사무실 최소 8:20 중 현재 3:20 남음');
+    await expect(state).toContainText('최대 배정보다 사무실 근무를 1:20 더 늘려야');
+    if (scenario.unknown) await expect(state).toContainText('미분류 근무 형태 확인: 3/4 (0:40)');
+    else await expect(state).not.toContainText('미분류 근무 형태 확인');
+    await expect(state.getByRole('button')).toHaveCount(0);
+  });
+}
 
 for (const width of [1440, 390]) {
   test(`office minimum is visible across tabs at ${width}`, async ({page}) => {

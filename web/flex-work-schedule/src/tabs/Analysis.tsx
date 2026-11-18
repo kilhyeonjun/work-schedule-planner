@@ -206,7 +206,7 @@ export function AnalysisTab({payload, loading, selected, setTarget, settings, ye
                 <div className="an-cmp">
                   {comparisons.map(c => {
                     const isSel = c.targetMinutes === selTarget;
-                    const state = planState({...c, status: c.status || c.feasibility?.status, accounting: plan?.accounting}, payload);
+                    const state = isSel && plan ? planState(plan, payload) : planState({...c, status: c.status || c.feasibility?.status, accounting: plan?.accounting}, payload);
                     const warn = state.warning;
                     const pay = c.projectedExtraPayAfterTaxKrw || 0;
                     const longDays = c.summary?.longDays || 0;
