@@ -82,7 +82,7 @@ pub fn dispatch(request: &Value) -> Result<Value> {
         ))),
         "explain_day" => {
             let p = json!({"dataOrigin":"synthetic","targetMinutes":0,"policy":{"weeklyLimitMinutes":0,"normalMinutes":0,"maxMinutes":0},"days":[input::item(a, "day")?.clone()]});
-            let m = model::parse_work_month(&p)?;
+            let m = model::parse_projection(&p)?;
             let day = m
                 .days()
                 .first()

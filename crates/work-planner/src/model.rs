@@ -183,7 +183,17 @@ pub fn week_key(date: NaiveDate) -> String {
     let iso = date.iso_week();
     format!("{:04}-W{:02}", iso.year(), iso.week())
 }
+/// Build a normalized month within the public planning limits.
 pub fn parse_work_month(payload: &Value) -> Result<WorkMonth> {
+    parse(payload, true)
+}
+
+/// Insights consume internal ledger projections, not public work-month inputs.
+pub(crate) fn parse_projection(payload: &Value) -> Result<WorkMonth> {
+    parse(payload, false)
+}
+
+fn parse(payload: &Value, public_limits: bool) -> Result<WorkMonth> {
     input::validate_limits(payload)?;
     let origin = text(input::get(payload, "dataOrigin")?.unwrap_or(&Value::Null));
     if origin != "synthetic" && origin != "operational" {
@@ -197,11 +207,18 @@ pub fn parse_work_month(payload: &Value) -> Result<WorkMonth> {
         return Err(Error::value("policy and at least one day are required"));
     };
     // Preserve Python's validation order, including non-coercing minute fields.
-    if raw_days.len() > MAX_MONTH_DAYS {
+    if public_limits && raw_days.len() > MAX_MONTH_DAYS {
         return Err(Error::value(format!(
             "days must contain at most {MAX_MONTH_DAYS} entries"
         )));
     }
+    let bounded_minutes = |value: &Value, field: &str, limit: i64| {
+        if public_limits {
+            bounded_minutes(value, field, limit)
+        } else {
+            integer(value, field)
+        }
+    };
     let weekly_limit_minutes = bounded_minutes(
         &p["weeklyLimitMinutes"],
         "weeklyLimitMinutes",
@@ -267,7 +284,7 @@ pub fn parse_work_month(payload: &Value) -> Result<WorkMonth> {
             )?,
         };
         let parsed = date(&d)?;
-        if !dates.insert(parsed) {
+        if public_limits && !dates.insert(parsed) {
             return Err(Error::value("day dates must be unique"));
         }
         days.push(Day {
@@ -282,6 +299,9 @@ pub fn parse_work_month(payload: &Value) -> Result<WorkMonth> {
         });
     }
     days.sort_by(|a, b| a.date.cmp(&b.date));
+    if !public_limits && days.windows(2).any(|pair| pair[0].date == pair[1].date) {
+        return Err(Error::value("day dates must be unique"));
+    }
     Ok(WorkMonth {
         data_origin: origin,
         generator: Value::Object(input::dictionary(&payload["generator"])?),

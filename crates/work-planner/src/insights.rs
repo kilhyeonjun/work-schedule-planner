@@ -2,7 +2,7 @@ use crate::{
     Error, Result,
     feasibility::additional_work_bounds,
     input::{self, array, get, item, string},
-    model::{date, parse_work_month, truthy, week_key},
+    model::{date, parse_projection, truthy, week_key},
     number::Num,
 };
 use chrono::{Datelike, Duration, NaiveDate, NaiveDateTime, Timelike};
@@ -227,7 +227,7 @@ fn constrained_projection(
         let bounds = if days.is_empty() {
             Some((0, 0))
         } else {
-            additional_work_bounds(&parse_work_month(&Value::Object(source))?)
+            additional_work_bounds(&parse_projection(&Value::Object(source))?)
         };
         let Some((lower, upper)) = bounds else {
             return Ok(None);
@@ -353,7 +353,7 @@ fn constrained_projection(
         return Ok(Some((baseline, baseline)));
     }
     let source = json!({"dataOrigin":get(payload,"dataOrigin")?.unwrap_or(&json!("operational")),"period":now.format("%Y-%m").to_string(),"timezone":"Asia/Seoul","targetMinutes":baseline+31*719,"policy":{"weeklyLimitMinutes":3120,"normalMinutes":normal,"maxMinutes":long,"dateOverrides":overrides},"days":days});
-    Ok(additional_work_bounds(&parse_work_month(&source)?)
+    Ok(additional_work_bounds(&parse_projection(&source)?)
         .map(|(l, u)| (baseline + l, baseline + u)))
 }
 pub fn parse_now(raw: &str) -> Result<NaiveDateTime> {

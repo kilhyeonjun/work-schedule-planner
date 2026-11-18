@@ -29,8 +29,10 @@ def test_fixed_week_above_limit_has_no_reachable_bounds():
         "policy": {"weeklyLimitMinutes": 3120, "normalMinutes": 500, "maxMinutes": 719,
                    "dateOverrides": {"2042-03-07": 500}},
         "days": [
-            {"date": "2042-03-03", "dayType": "workday", "workedMinutes": 2800, "recognizedMinutes": 2800,
-             "leaveMinutes": 0, "availability": {"available": False, "minWorkMinutes": 0, "maxWorkMinutes": 2800}},
+            {"date": "2042-03-03", "dayType": "workday", "workedMinutes": 1400, "recognizedMinutes": 1400,
+             "leaveMinutes": 0, "availability": {"available": False, "minWorkMinutes": 0, "maxWorkMinutes": 1400}},
+            {"date": "2042-03-04", "dayType": "workday", "workedMinutes": 1400, "recognizedMinutes": 1400,
+             "leaveMinutes": 0, "availability": {"available": False, "minWorkMinutes": 0, "maxWorkMinutes": 1400}},
             {"date": "2042-03-07", "dayType": "workday", "workedMinutes": 0, "recognizedMinutes": 0,
              "leaveMinutes": 0, "availability": {"available": True, "minWorkMinutes": 285, "maxWorkMinutes": 500}},
         ],
