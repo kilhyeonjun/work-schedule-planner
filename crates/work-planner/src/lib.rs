@@ -9,7 +9,7 @@ pub mod number;
 pub mod planner;
 
 use insights::s;
-pub use planner::plan_month;
+pub use planner::{FlexAllocation, allocate_flex_projection, plan_month};
 use serde_json::{Value, json};
 #[derive(Debug)]
 pub struct Error {

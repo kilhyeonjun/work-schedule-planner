@@ -2,7 +2,7 @@ use crate::{
     Error, Result,
     explain::{explain_day, explain_result},
     feasibility::*,
-    model::{WorkMonth, parse_work_month},
+    model::{MAX_TARGET_MINUTES, WorkMonth, parse_flex_allocation, parse_work_month},
 };
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -239,7 +239,7 @@ fn minimum_activation(
     }
     Ok((planned, activated))
 }
-fn allocate(month: &WorkMonth) -> Result<std::result::Result<Vec<i64>, Value>> {
+fn allocate(month: &WorkMonth, requested: i64) -> Result<std::result::Result<Vec<i64>, Value>> {
     for day in month.days() {
         if day.availability.min_work_minutes > day.availability.max_work_minutes {
             return Ok(Err(
@@ -248,8 +248,6 @@ fn allocate(month: &WorkMonth) -> Result<std::result::Result<Vec<i64>, Value>> {
         }
     }
     let mut allocated = vec![0; month.days().len()];
-    let baseline: i64 = month.days().iter().map(|d| d.recognized_minutes).sum();
-    let requested = (month.target_minutes() - baseline).max(0);
     let mut weekly = weekly_work_baseline(month.days());
     let actual = weekly.clone();
     let mut caps: Vec<i64> = month
@@ -306,13 +304,48 @@ fn allocate(month: &WorkMonth) -> Result<std::result::Result<Vec<i64>, Value>> {
     );
     Ok(Ok(allocated))
 }
+
+/// Result of a Flex balanced allocation pass. Entries contain only nonzero
+/// additional work; a constraint conflict is separate from malformed input.
+pub enum FlexAllocation {
+    Planned(Vec<(String, i64)>),
+    Infeasible(Value),
+}
+
+/// Allocate a bounded amount on an operational Flex projection. The amount is
+/// independent of recognized baseline; projected ledger fields retain bounded
+/// work/leave sums while all attendance limits stay in the public domain.
+pub fn allocate_flex_projection(payload: &Value, additional: i64) -> Result<FlexAllocation> {
+    if !(0..=MAX_TARGET_MINUTES).contains(&additional) {
+        return Err(Error::value("additional minutes out of supported range"));
+    }
+    let month = parse_flex_allocation(payload)?;
+    if month.data_origin() != "operational" {
+        return Err(Error::value(
+            "Flex allocation requires an operational projection",
+        ));
+    }
+    match allocate(&month, additional)? {
+        Ok(minutes) => Ok(FlexAllocation::Planned(
+            month
+                .into_days()
+                .into_iter()
+                .zip(minutes)
+                .filter_map(|(day, add)| (add != 0).then_some((day.date, add)))
+                .collect(),
+        )),
+        Err(failure) => Ok(FlexAllocation::Infeasible(failure)),
+    }
+}
+
 pub fn plan_month(payload: &Value) -> Result<Value> {
     let month = parse_work_month(payload)?;
-    let (allocated, infeasible) = match allocate(&month)? {
+    let baseline: i64 = month.days().iter().map(|d| d.recognized_minutes).sum();
+    let requested = (month.target_minutes() - baseline).max(0);
+    let (allocated, infeasible) = match allocate(&month, requested)? {
         Ok(a) => (a, None),
         Err(e) => (vec![0; month.days().len()], Some(e)),
     };
-    let baseline: i64 = month.days().iter().map(|d| d.recognized_minutes).sum();
     let additional: i64 = allocated.iter().sum();
     let projected = baseline + additional;
     let gap = (month.target_minutes() - projected).max(0);

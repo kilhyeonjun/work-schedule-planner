@@ -127,6 +127,31 @@ fn schema_minute_limits_are_inclusive_and_enforced() {
 }
 
 #[test]
+fn flex_allocation_keeps_ledger_baseline_separate_from_additional_target() {
+    use work_planner::{FlexAllocation, allocate_flex_projection};
+
+    let mut input = source();
+    input["dataOrigin"] = json!("operational");
+    input["targetMinutes"] = json!(44_640 + 600);
+    let day = &mut input["days"][0];
+    day["availability"] = json!({"available":false,"maxWorkMinutes":1500});
+    day["workedMinutes"] = json!(1500);
+    day["recognizedMinutes"] = json!(1720);
+    day["leaveMinutes"] = json!(220);
+    assert!(plan_month(&input).is_err());
+    assert!(matches!(
+        allocate_flex_projection(&input, 44_640).unwrap(),
+        FlexAllocation::Planned(rows) if !rows.is_empty() && rows.iter().all(|(_, add)| *add <= 719)
+    ));
+    assert!(allocate_flex_projection(&input, 44_641).is_err());
+    input["days"][1]["availability"]["maxWorkMinutes"] = json!(1441);
+    assert!(allocate_flex_projection(&input, 1).is_err());
+    input["days"][1]["availability"]["maxWorkMinutes"] = json!(719);
+    input["policy"]["weeklyLimitMinutes"] = json!(10_081);
+    assert!(allocate_flex_projection(&input, 1).is_err());
+}
+
+#[test]
 fn month_size_and_date_identity_are_bounded() {
     let mut input = source();
     let day = input["days"][0].clone();

@@ -87,6 +87,9 @@ impl WorkMonth {
     pub fn days(&self) -> &[Day] {
         &self.days
     }
+    pub(crate) fn into_days(self) -> Vec<Day> {
+        self.days
+    }
 }
 pub fn truthy(v: &Value) -> bool {
     match v {
@@ -185,15 +188,33 @@ pub fn week_key(date: NaiveDate) -> String {
 }
 /// Build a normalized month within the public planning limits.
 pub fn parse_work_month(payload: &Value) -> Result<WorkMonth> {
-    parse(payload, true)
+    parse(payload, Domain::Public)
 }
 
 /// Insights consume internal ledger projections, not public work-month inputs.
 pub(crate) fn parse_projection(payload: &Value) -> Result<WorkMonth> {
-    parse(payload, false)
+    parse(payload, Domain::Insights)
 }
 
-fn parse(payload: &Value, public_limits: bool) -> Result<WorkMonth> {
+// A Flex pass can fold two classified work buckets and existing advice into
+// one baseline. Recognition can additionally include the paid-leave bucket.
+const FLEX_WORK: i64 = 3 * MAX_DAILY_MINUTES;
+const FLEX_RECOGNIZED: i64 = 4 * MAX_DAILY_MINUTES;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Domain {
+    Public,
+    Insights,
+    Flex,
+}
+
+pub(crate) fn parse_flex_allocation(payload: &Value) -> Result<WorkMonth> {
+    parse(payload, Domain::Flex)
+}
+
+fn parse(payload: &Value, domain: Domain) -> Result<WorkMonth> {
+    let bounded = domain != Domain::Insights;
+    let flex = domain == Domain::Flex;
     input::validate_limits(payload)?;
     let origin = text(input::get(payload, "dataOrigin")?.unwrap_or(&Value::Null));
     if origin != "synthetic" && origin != "operational" {
@@ -207,13 +228,13 @@ fn parse(payload: &Value, public_limits: bool) -> Result<WorkMonth> {
         return Err(Error::value("policy and at least one day are required"));
     };
     // Preserve Python's validation order, including non-coercing minute fields.
-    if public_limits && raw_days.len() > MAX_MONTH_DAYS {
+    if bounded && raw_days.len() > MAX_MONTH_DAYS {
         return Err(Error::value(format!(
             "days must contain at most {MAX_MONTH_DAYS} entries"
         )));
     }
     let bounded_minutes = |value: &Value, field: &str, limit: i64| {
-        if public_limits {
+        if bounded {
             bounded_minutes(value, field, limit)
         } else {
             integer(value, field)
@@ -228,7 +249,8 @@ fn parse(payload: &Value, public_limits: bool) -> Result<WorkMonth> {
     let max_minutes = bounded_minutes(&p["maxMinutes"], "maxMinutes", MAX_DAILY_MINUTES)?;
     let mut overrides = BTreeMap::new();
     for (k, v) in input::dictionary(&p["dateOverrides"])? {
-        let minutes = bounded_minutes(&v, &format!("dateOverrides.{k}"), MAX_DAILY_MINUTES)?;
+        let maximum = if flex { FLEX_WORK } else { MAX_DAILY_MINUTES };
+        let minutes = bounded_minutes(&v, &format!("dateOverrides.{k}"), maximum)?;
         overrides.insert(k, minutes);
     }
     let mut weekday_caps = BTreeMap::new();
@@ -261,17 +283,25 @@ fn parse(payload: &Value, public_limits: bool) -> Result<WorkMonth> {
             ));
         }
         let d = text(&raw["date"]);
-        let worked_minutes =
-            bounded_minutes(&raw["workedMinutes"], "workedMinutes", MAX_DAILY_MINUTES)?;
+        let worked_minutes = bounded_minutes(
+            &raw["workedMinutes"],
+            "workedMinutes",
+            if flex { FLEX_WORK } else { MAX_DAILY_MINUTES },
+        )?;
         let recognized_minutes = bounded_minutes(
             &raw["recognizedMinutes"],
             "recognizedMinutes",
-            MAX_DAILY_MINUTES,
+            if flex {
+                FLEX_RECOGNIZED
+            } else {
+                MAX_DAILY_MINUTES
+            },
         )?;
         let leave_minutes =
             bounded_minutes(&raw["leaveMinutes"], "leaveMinutes", MAX_DAILY_MINUTES)?;
+        let available = truthy(&a["available"]);
         let availability = Availability {
-            available: truthy(&a["available"]),
+            available,
             min_work_minutes: bounded_minutes(
                 a.get("minWorkMinutes").unwrap_or(&json!(0)),
                 "minWorkMinutes",
@@ -280,11 +310,15 @@ fn parse(payload: &Value, public_limits: bool) -> Result<WorkMonth> {
             max_work_minutes: bounded_minutes(
                 &a["maxWorkMinutes"],
                 "maxWorkMinutes",
-                MAX_DAILY_MINUTES,
+                if flex && !available {
+                    worked_minutes
+                } else {
+                    MAX_DAILY_MINUTES
+                },
             )?,
         };
         let parsed = date(&d)?;
-        if public_limits && !dates.insert(parsed) {
+        if bounded && !dates.insert(parsed) {
             return Err(Error::value("day dates must be unique"));
         }
         days.push(Day {
@@ -299,19 +333,36 @@ fn parse(payload: &Value, public_limits: bool) -> Result<WorkMonth> {
         });
     }
     days.sort_by(|a, b| a.date.cmp(&b.date));
-    if !public_limits && days.windows(2).any(|pair| pair[0].date == pair[1].date) {
+    if !bounded && days.windows(2).any(|pair| pair[0].date == pair[1].date) {
         return Err(Error::value("day dates must be unique"));
     }
+    if flex {
+        for day in &days {
+            if let Some(&total) = policy.date_overrides.get(&day.date)
+                && total > MAX_DAILY_MINUTES
+                && total != day.worked_minutes
+            {
+                return Err(Error::value(
+                    "Flex date override exceeds daily allocation limit",
+                ));
+            }
+        }
+    }
+    let target_minutes = if flex {
+        0 // The Flex allocation entry takes an explicit, bounded additional amount.
+    } else {
+        bounded_minutes(
+            &payload["targetMinutes"],
+            "targetMinutes",
+            MAX_TARGET_MINUTES,
+        )?
+    };
     Ok(WorkMonth {
         data_origin: origin,
         generator: Value::Object(input::dictionary(&payload["generator"])?),
         period: text(&payload["period"]),
         timezone: text(&payload["timezone"]),
-        target_minutes: bounded_minutes(
-            &payload["targetMinutes"],
-            "targetMinutes",
-            MAX_TARGET_MINUTES,
-        )?,
+        target_minutes,
         policy,
         days,
     })
