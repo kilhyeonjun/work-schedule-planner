@@ -10,7 +10,7 @@ pub fn daily_work_cap(day: &Day, policy: &Policy) -> i64 {
     if let Some(v) = policy.date_overrides.get(&day.date) {
         cap = cap.min(*v);
     }
-    if let Some(v) = policy.weekday_caps.get(&day.weekday) {
+    if let Some(v) = policy.weekday_caps.get(&i64::from(day.weekday)) {
         cap = cap.min(*v);
     }
     cap.max(day.worked_minutes)
@@ -83,8 +83,10 @@ impl Bits {
             }
         }
         let used = self.max % 64 + 1;
-        if used < 64 {
-            *self.words.last_mut().unwrap() &= (1 << used) - 1;
+        if used < 64
+            && let Some(last) = self.words.last_mut()
+        {
+            *last &= (1 << used) - 1;
         }
     }
     pub fn values(&self) -> impl Iterator<Item = usize> + '_ {

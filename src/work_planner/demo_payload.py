@@ -9,6 +9,7 @@ from typing import Any
 
 from .insights import month_insights
 from .planner import plan_month
+from .validation import validate_limits
 
 DEMO_YEAR = 2042
 DEMO_MONTH = 3
@@ -258,6 +259,7 @@ def month_payload(
     long: int = 719,
     short: int = 285,
 ) -> dict[str, Any]:
+    validate_limits({"target": target, "normal": normal, "long": long, "short": short})
     year, month = min((year, month), (DEMO_TODAY.year, DEMO_TODAY.month))
     archive = (year, month) != (DEMO_YEAR, DEMO_MONTH)
     source = _source(year, month, target, normal, long, short, archive=archive)

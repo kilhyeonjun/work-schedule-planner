@@ -43,7 +43,12 @@ fn water_fill(
             break;
         };
         allocated[index] += 1;
-        *weekly.get_mut(&month.days[index].week_key).unwrap() += 1;
+        let week = &month.days[index].week_key;
+        if let Some(total) = weekly.get_mut(week) {
+            *total += 1;
+        } else {
+            weekly.insert(week.clone(), 1);
+        }
         remaining -= 1;
     }
     remaining
@@ -115,10 +120,10 @@ fn minimum_activation(
     caps: &[i64],
     weekly: &BTreeMap<String, i64>,
     target: i64,
-) -> (i64, Vec<bool>) {
+) -> Result<(i64, Vec<bool>)> {
     let count = month.days.len();
     if !month.days.iter().any(|d| minimum_additional_work(d) > 0) {
-        return (target, vec![false; count]);
+        return Ok((target, vec![false; count]));
     }
     let mut preferred = vec![0; count];
     water_fill(
@@ -189,21 +194,24 @@ fn minimum_activation(
     for week in &weeks {
         let mut combined = Bits::new(target as usize);
         for amount in week.reachable.values() {
-            combined.shifted_or(prefixes.last().unwrap(), amount);
+            let prefix = prefixes
+                .last()
+                .ok_or_else(|| Error::value("missing activation prefix"))?;
+            combined.shifted_or(prefix, amount);
         }
         prefixes.push(combined);
     }
-    let planned = prefixes.last().unwrap().maximum().unwrap_or(0) as i64;
+    let planned = prefixes.last().and_then(Bits::maximum).unwrap_or(0) as i64;
     let mut activated = vec![false; count];
     let mut remaining = planned;
     for (index, week) in weeks.iter().enumerate().rev() {
         let preferred_week: i64 = week.days.iter().map(|&i| preferred[i]).sum();
-        let amount = week
-            .reachable
-            .values()
-            .filter(|&v| v <= remaining as usize && prefixes[index].get(remaining as usize - v))
-            .min_by_key(|&v| ((v as i64 - preferred_week).abs(), v))
-            .unwrap() as i64;
+        let amount =
+            week.reachable
+                .values()
+                .filter(|&v| v <= remaining as usize && prefixes[index].get(remaining as usize - v))
+                .min_by_key(|&v| ((v as i64 - preferred_week).abs(), v))
+                .ok_or_else(|| Error::value("unreachable activation amount"))? as i64;
         let selected = week
             .options
             .iter()
@@ -219,13 +227,13 @@ fn minimum_activation(
                     &o.selected,
                 )
             })
-            .unwrap();
+            .ok_or_else(|| Error::value("unreachable activation subset"))?;
         for &i in &selected.selected {
             activated[i] = true;
         }
         remaining -= amount;
     }
-    (planned, activated)
+    Ok((planned, activated))
 }
 fn allocate(month: &WorkMonth) -> Result<std::result::Result<Vec<i64>, Value>> {
     for day in &month.days {
@@ -273,7 +281,7 @@ fn allocate(month: &WorkMonth) -> Result<std::result::Result<Vec<i64>, Value>> {
         }
     }
     let (mut remaining, activated) =
-        minimum_activation(month, &caps, &weekly, (requested - fixed_total).max(0));
+        minimum_activation(month, &caps, &weekly, (requested - fixed_total).max(0))?;
     for (i, day) in month.days.iter().enumerate() {
         if !activated[i] {
             continue;
@@ -331,9 +339,7 @@ pub fn plan_month(payload: &Value) -> Result<Value> {
     };
     if constraints
         .as_object()
-        .unwrap()
-        .values()
-        .any(|v| v == false)
+        .is_some_and(|o| o.values().any(|v| v == false))
     {
         return Err(Error::new(
             "AssertionError",

@@ -4,6 +4,7 @@ from __future__ import annotations
 import atexit
 import builtins
 import dataclasses
+import datetime as dt
 import functools
 import json
 import os
@@ -14,14 +15,27 @@ from pathlib import Path
 _lock = threading.Lock()
 _process: subprocess.Popen | None = None
 
+# Python 3.14 adds ISO end-of-day 24:00 support; native Rust defaults to 3.11.
+try:
+    _ISO_MIDNIGHT_24 = dt.time.fromisoformat("24").hour == 0
+except ValueError:
+    _ISO_MIDNIGHT_24 = False
+try:
+    _ISO_SHORT_FRACTION = dt.time.fromisoformat("09.5").microsecond == 500_000
+except ValueError:
+    _ISO_SHORT_FRACTION = False
+
 
 def _close():
     global _process
-    if _process is not None:
-        _process.stdin.close()
-        _process.wait()
-        _process.stdout.close()
-        _process = None
+    process, _process = _process, None
+    if process is not None:
+        try:
+            process.stdin.close()
+        except (BrokenPipeError, OSError):
+            pass
+        process.wait()
+        process.stdout.close()
 
 
 atexit.register(_close)
@@ -30,7 +44,12 @@ atexit.register(_close)
 def call(op: str, **args):
     """Call the library CLI; never build, download, or fall back to Python."""
     global _process
+    from work_planner.validation import validate_limits
+
+    validate_limits(args)
     with _lock:
+        if _process is not None and _process.poll() is not None:
+            _close()
         if _process is None:
             root = Path(__file__).resolve().parents[2]
             binary = os.environ.get("WORK_PLANNER_RUST_BIN")
@@ -41,14 +60,33 @@ def call(op: str, **args):
                 [binary], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                 text=True, encoding="utf-8", bufsize=1,
             )
-        _process.stdin.write(json.dumps({"op": op, "args": args}, ensure_ascii=False) + "\n")
-        _process.stdin.flush()
-        line = _process.stdout.readline()
-        if not line:
-            raise RuntimeError("Rust planner CLI exited without a response")
-        response = json.loads(line)
+        try:
+            request = {"op": op, "args": args, "compat": {
+                "isoMidnight24": _ISO_MIDNIGHT_24, "isoShortFraction": _ISO_SHORT_FRACTION,
+            }}
+            _process.stdin.write(json.dumps(request, ensure_ascii=False) + "\n")
+            _process.stdin.flush()
+            line = _process.stdout.readline()
+            if not line:
+                raise RuntimeError("Rust planner CLI exited without a response")
+            response = json.loads(line)
+            if not isinstance(response, dict) or not isinstance(response.get("ok"), bool):
+                raise TypeError("Rust planner CLI returned a malformed response")
+            if response["ok"]:
+                if "result" not in response:
+                    raise RuntimeError("Rust planner CLI omitted its result")
+            else:
+                error = response.get("error")
+                if not isinstance(error, dict) or not all(
+                    isinstance(error.get(key), str) for key in ("type", "message")
+                ):
+                    raise RuntimeError("Rust planner CLI returned a malformed error")
+        except (OSError, RuntimeError, ValueError, TypeError):
+            _close()
+            raise
         if not response["ok"]:
             error = response["error"]
+            _close()
             raise getattr(builtins, error["type"], RuntimeError)(error["message"])
         return response["result"]
 

@@ -1,5 +1,5 @@
 use crate::{
-    Result,
+    Error, Result, input,
     insights::{month_insights, n, rows, s},
     model::{date, week_key},
     planner::plan_month,
@@ -14,6 +14,9 @@ pub const DEFAULT_TARGET: i64 = 7800;
 pub const TODAY: &str = "2042-03-04";
 const WEEKDAYS: [&str; 7] = ["월", "화", "수", "목", "금", "토", "일"];
 pub fn month_dates(year: i32, month: u32) -> Result<Vec<NaiveDate>> {
+    if !(1..=9999).contains(&year) {
+        return Err(Error::value("year out of range"));
+    }
     let start = NaiveDate::from_ymd_opt(year, month, 1)
         .ok_or_else(|| crate::Error::value("month must be in 1..12"))?;
     Ok((0..31)
@@ -73,6 +76,7 @@ pub fn source(
     short: i64,
     archive: bool,
 ) -> Result<Value> {
+    input::validate_limits(&json!({"target":target,"normal":normal,"long":long,"short":short}))?;
     let mut days = Vec::new();
     for d in month_dates(year, month)? {
         let key = d.to_string();
@@ -111,12 +115,30 @@ fn combinations(indices: &[usize], size: usize) -> Vec<Vec<usize>> {
     visit(indices, size, 0, &mut Vec::new(), &mut out);
     out
 }
-pub fn normal_first(mut result: Value, source: &Value, normal: i64) -> Value {
-    let source_days: BTreeMap<&str, &Value> = rows(&source["days"])
+pub fn normal_first(mut result: Value, source: &Value, normal: i64) -> Result<Value> {
+    input::validate_limits(&result)?;
+    input::validate_limits(source)?;
+    input::minute_limit(&json!(normal))?;
+    let source_days: BTreeMap<&str, &Value> = input::array(input::item(source, "days")?)?
         .iter()
-        .map(|d| (s(d, "date"), d))
-        .collect();
-    let rs = result["days"].as_array_mut().unwrap();
+        .map(|d| Ok((input::string(input::item(d, "date")?)?, d)))
+        .collect::<Result<_>>()?;
+    let rs = result
+        .get_mut("days")
+        .and_then(Value::as_array_mut)
+        .ok_or_else(|| Error::new("TypeError", "days must be iterable"))?;
+    for row in rs.iter() {
+        input::object(row)?;
+        for key in [
+            "plannedAdditionalMinutes",
+            "workedMinutes",
+            "leaveMinutes",
+            "dailyWorkCapMinutes",
+            "recognizedMinutes",
+        ] {
+            input::arithmetic_int(input::item(row, key)?)?;
+        }
+    }
     let mut weeks: BTreeMap<String, Vec<usize>> = BTreeMap::new();
     for (i, row) in rs.iter().enumerate() {
         weeks.entry(s(row, "week").to_owned()).or_default().push(i);
@@ -130,7 +152,11 @@ pub fn normal_first(mut result: Value, source: &Value, normal: i64) -> Value {
         let mut bounds = BTreeMap::new();
         for &i in indices {
             let row = &rs[i];
-            let a = &source_days[s(row, "date")]["availability"];
+            let raw = source_days
+                .get(s(row, "date"))
+                .ok_or_else(|| Error::new("KeyError", s(row, "date")))?;
+            let a = input::item(raw, "availability")?;
+            input::object(a)?;
             if a["available"] != true {
                 continue;
             }
@@ -164,7 +190,7 @@ pub fn normal_first(mut result: Value, source: &Value, normal: i64) -> Value {
         let mut remaining = total - allocation.values().sum::<i64>();
         for &i in &selected {
             let added = remaining.min(bounds[&i][target_bound] - allocation[&i]);
-            *allocation.get_mut(&i).unwrap() += added;
+            *allocation.entry(i).or_default() += added;
             remaining -= added;
             if remaining == 0 {
                 break;
@@ -183,7 +209,7 @@ pub fn normal_first(mut result: Value, source: &Value, normal: i64) -> Value {
             };
         }
     }
-    result
+    Ok(result)
 }
 pub fn demo_plan(
     year: i32,
@@ -195,7 +221,7 @@ pub fn demo_plan(
     archive: bool,
 ) -> Result<Value> {
     let src = source(year, month, target, normal, long, short, archive)?;
-    Ok(normal_first(plan_month(&src)?, &src, normal))
+    normal_first(plan_month(&src)?, &src, normal)
 }
 fn weekly(
     rs: &[Value],
@@ -348,7 +374,7 @@ pub fn month_payload(
     let today_index = planner_days
         .iter()
         .position(|d| s(d, "date") == TODAY)
-        .unwrap();
+        .ok_or_else(|| Error::value("the current demo day is missing"))?;
     let today_window = window(n(&planner_days[today_index], "plannedMinutes"));
     planner_days[today_index]["window"] = json!(today_window);
     let today_plan = planner_days[today_index].clone();

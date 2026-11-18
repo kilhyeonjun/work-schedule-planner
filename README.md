@@ -52,10 +52,29 @@ The demo facade retains its observable Python LRU cache and passes its computed
 Rust plans to Rust payload assembly, avoiding repeated allocation.
 
 Parity tests use an independent Python process and the Rust CLI: all five
-scenario fixtures, 100 deterministic Hypothesis planner/bounds examples, 100
-Hypothesis insight examples, and demo/route/explanation cases. JSON object order
+scenario fixtures, 800 deterministic Hypothesis examples covering planning,
+insights, coercion, ISO times, malformed containers and huge integers, plus
+demo/route/explanation cases. JSON object order
 is immaterial; array order and floating-point values must agree exactly. Route
 JSON bodies additionally match Python's text serialization byte for byte;
 Serde's insertion-order feature retains the Python dictionary order for this API.
 The public-boundary scanner also covers `crates/`; no scanner allowlists or
 frontend source manifests are changed.
+
+### Input safety and Python semantics
+
+Both backends enforce finite minute quantities within ±10,000,000 and at most
+366 entries in each `days` collection before arithmetic. This is intentionally
+far wider than the normalized schema; all existing fixtures and demo payloads
+are unaffected. Non-minute metadata such as generator seeds is not bounded.
+Normalized minutes remain non-negative integers, without coercion. At Python
+`int()` conversion sites, floats truncate and signed/underscored decimal strings
+are accepted; malformed values raise the corresponding Python exception.
+Insights retain float/bool arithmetic identity and nearest-even rounding.
+
+Native ISO parsing follows Python 3.11. The Python transport also feature-detects
+newer standard-library ISO syntax differences (end-of-day `24:00` and fractional
+short times), so selecting Rust does not change the calling runtime's behavior.
+Bad input returns an error without terminating the CLI. The transport discards
+failed/dead children; the next call starts a fresh process, never replays the
+failed request, and never falls back to Python.
