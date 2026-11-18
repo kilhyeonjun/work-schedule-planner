@@ -1,0 +1,17 @@
+[package]
+name = "work-planner"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+python-parity = ["serde_json/arbitrary_precision"]
+
+[dependencies]
+serde = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+
+[[bin]]
+name = "work-planner-cli"
+path = "src/main.rs"
+required-features = ["python-parity"]

@@ -4,6 +4,8 @@ import datetime as dt
 from dataclasses import dataclass
 from typing import Any
 
+from .validation import validate_limits
+
 
 @dataclass(frozen=True)
 class Availability:
@@ -63,6 +65,7 @@ def _integer(value: Any, name: str) -> int:
 
 
 def parse_work_month(payload: dict[str, Any]) -> WorkMonth:
+    validate_limits(payload)
     data_origin = str(payload.get("dataOrigin") or "")
     if data_origin not in {"synthetic", "operational"}:
         raise ValueError("dataOrigin must be synthetic or operational")

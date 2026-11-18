@@ -5,6 +5,8 @@ import datetime as dt
 import re
 from zoneinfo import ZoneInfo
 
+from .validation import validate_limits
+
 _KST = ZoneInfo("Asia/Seoul")
 
 
@@ -144,7 +146,9 @@ def _constrained_projection(payload: dict, now: dt.datetime, *, leave_now: bool 
         raw = settings.get("dateOverrides", {}).get(date)
         fixed = raw.get("minutes") if isinstance(raw, dict) else raw
         if fixed is not None and active:
-            cap = max(worked, min(cap, max(0, int(fixed) - leave)))
+            fixed = int(fixed)
+            validate_limits(fixed, minute_value=True)
+            cap = max(worked, min(cap, max(0, fixed - leave)))
             overrides[date] = cap
         if date == today and active:
             # Same latest-end policy as the recommendation's work windows.
@@ -189,6 +193,8 @@ def _constrained_projection(payload: dict, now: dt.datetime, *, leave_now: bool 
 
 def month_insights(payload: dict, *, now: dt.datetime, projection_constraints: dict | None = None) -> dict | None:
     """Derive ledger-basis projections through constrained allocation; naive now is KST."""
+    validate_limits(payload)
+    validate_limits(projection_constraints)
     planner = payload.get("planner") or {}
     plan = planner.get("plan")
     if plan is None:
