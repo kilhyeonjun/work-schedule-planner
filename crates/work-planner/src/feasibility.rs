@@ -6,11 +6,11 @@ pub fn daily_work_cap(day: &Day, policy: &Policy) -> i64 {
     if day.day_type != "workday" || !day.availability.available {
         return day.worked_minutes;
     }
-    let mut cap = policy.max_minutes.min(day.availability.max_work_minutes);
-    if let Some(v) = policy.date_overrides.get(&day.date) {
+    let mut cap = policy.max_minutes().min(day.availability.max_work_minutes);
+    if let Some(v) = policy.date_overrides().get(&day.date) {
         cap = cap.min(*v);
     }
-    if let Some(v) = policy.weekday_caps.get(&i64::from(day.weekday)) {
+    if let Some(v) = policy.weekday_caps().get(&i64::from(day.weekday)) {
         cap = cap.min(*v);
     }
     cap.max(day.worked_minutes)
@@ -42,7 +42,7 @@ pub fn verify_constraints(days: &[Day], policy: &Policy, allocated: &[i64]) -> V
             minimum &= day.worked_minutes + additional >= day.availability.min_work_minutes;
         }
     }
-    let mut result = json!({"dailyCapsPassed": daily, "weeklyCapsPassed": weekly.iter().all(|(w,t)| *t <= policy.weekly_limit_minutes.max(*baseline.get(w).unwrap_or(&0))), "unavailableDaysPassed": unavailable});
+    let mut result = json!({"dailyCapsPassed": daily, "weeklyCapsPassed": weekly.iter().all(|(w,t)| *t <= policy.weekly_limit_minutes().max(*baseline.get(w).unwrap_or(&0))), "unavailableDaysPassed": unavailable});
     if days.iter().any(|d| d.availability.min_work_minutes != 0) {
         result["minimumWorkPassed"] = json!(minimum);
     }
@@ -107,23 +107,24 @@ impl Bits {
     }
 }
 pub fn additional_work_bounds(month: &WorkMonth) -> Option<(i64, i64)> {
-    let baseline = weekly_work_baseline(&month.days);
+    let baseline = weekly_work_baseline(month.days());
     let mut reachable: BTreeMap<String, Bits> = BTreeMap::new();
     let mut fixed = 0;
-    for day in &month.days {
-        let cap = daily_additional_cap(day, &month.policy);
+    for day in month.days() {
+        let cap = daily_additional_cap(day, month.policy());
         if cap == 0 {
             continue;
         }
-        let room = (month.policy.weekly_limit_minutes - baseline.get(&day.week_key).unwrap_or(&0))
-            .max(0) as usize;
+        let room = (month.policy().weekly_limit_minutes()
+            - baseline.get(&day.week_key).unwrap_or(&0))
+        .max(0) as usize;
         let bits = reachable.entry(day.week_key.clone()).or_insert_with(|| {
             let mut b = Bits::new(room);
             b.set(0);
             b
         });
         let previous = bits.clone();
-        if month.policy.date_overrides.contains_key(&day.date) {
+        if month.policy().date_overrides().contains_key(&day.date) {
             *bits = Bits::new(room);
             bits.shifted_or(&previous, cap as usize);
             fixed += cap;

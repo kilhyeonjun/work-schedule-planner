@@ -94,8 +94,87 @@ fn iso_week_crosses_calendar_year() {
     let mut input = source();
     input["days"][0]["date"] = json!("2021-01-01");
     let month = parse_work_month(&input).unwrap();
-    assert_eq!(month.days[0].week_key, "2020-W53");
-    assert_eq!(month.days[0].weekday, 4);
+    assert_eq!(month.days()[0].week_key, "2020-W53");
+    assert_eq!(month.days()[0].weekday, 4);
+}
+
+#[test]
+fn schema_minute_limits_are_inclusive_and_enforced() {
+    for (path, maximum) in [
+        ("/targetMinutes", 44_640),
+        ("/policy/weeklyLimitMinutes", 10_080),
+        ("/policy/normalMinutes", 1_440),
+        ("/policy/maxMinutes", 1_440),
+        ("/days/0/workedMinutes", 1_440),
+        ("/days/0/recognizedMinutes", 1_440),
+        ("/days/0/leaveMinutes", 1_440),
+        ("/days/0/availability/minWorkMinutes", 1_440),
+        ("/days/0/availability/maxWorkMinutes", 1_440),
+    ] {
+        let mut input = source();
+        *input.pointer_mut(path).unwrap() = json!(maximum);
+        assert!(parse_work_month(&input).is_ok(), "{path}");
+        *input.pointer_mut(path).unwrap() = json!(maximum + 1);
+        assert!(parse_work_month(&input).is_err(), "{path}");
+    }
+    for (policy, key) in [("dateOverrides", "2042-03-03"), ("weekdayCaps", "0")] {
+        let mut input = source();
+        input["policy"][policy][key] = json!(1440);
+        assert!(parse_work_month(&input).is_ok());
+        input["policy"][policy][key] = json!(1441);
+        assert!(parse_work_month(&input).is_err());
+    }
+}
+
+#[test]
+fn flex_allocation_keeps_ledger_baseline_separate_from_additional_target() {
+    use work_planner::{FlexAllocation, allocate_flex_projection};
+
+    let mut input = source();
+    input["dataOrigin"] = json!("operational");
+    input["targetMinutes"] = json!(44_640 + 600);
+    let day = &mut input["days"][0];
+    day["availability"] = json!({"available":false,"maxWorkMinutes":1500});
+    day["workedMinutes"] = json!(1500);
+    day["recognizedMinutes"] = json!(1720);
+    day["leaveMinutes"] = json!(220);
+    assert!(plan_month(&input).is_err());
+    assert!(matches!(
+        allocate_flex_projection(&input, 44_640).unwrap(),
+        FlexAllocation::Planned(rows) if !rows.is_empty() && rows.iter().all(|(_, add)| *add <= 719)
+    ));
+    assert!(allocate_flex_projection(&input, 44_641).is_err());
+    input["days"][1]["availability"]["maxWorkMinutes"] = json!(1441);
+    assert!(allocate_flex_projection(&input, 1).is_err());
+    input["days"][1]["availability"]["maxWorkMinutes"] = json!(719);
+    input["policy"]["weeklyLimitMinutes"] = json!(10_081);
+    assert!(allocate_flex_projection(&input, 1).is_err());
+}
+
+#[test]
+fn month_size_and_date_identity_are_bounded() {
+    let mut input = source();
+    let day = input["days"][0].clone();
+    let days = input["days"].as_array_mut().unwrap();
+    days.clear();
+    days.extend((1..=31).map(|i| {
+        let mut row = day.clone();
+        row["date"] = json!(format!("2042-03-{i:02}"));
+        row
+    }));
+    assert!(parse_work_month(&input).is_ok());
+    input["days"].as_array_mut().unwrap().push(day);
+    assert_eq!(
+        parse_work_month(&input).unwrap_err().message,
+        "days must contain at most 31 entries"
+    );
+
+    let mut input = source();
+    input["days"][1]["date"] = json!("20420303");
+    assert_eq!(
+        parse_work_month(&input).unwrap_err().message,
+        "day dates must be unique"
+    );
 }
 macro_rules! golden {
     ($test:ident,$name:literal) => {

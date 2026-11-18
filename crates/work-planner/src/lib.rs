@@ -9,7 +9,7 @@ pub mod number;
 pub mod planner;
 
 use insights::s;
-pub use planner::plan_month;
+pub use planner::{FlexAllocation, allocate_flex_projection, plan_month};
 use serde_json::{Value, json};
 #[derive(Debug)]
 pub struct Error {
@@ -82,9 +82,9 @@ pub fn dispatch(request: &Value) -> Result<Value> {
         ))),
         "explain_day" => {
             let p = json!({"dataOrigin":"synthetic","targetMinutes":0,"policy":{"weeklyLimitMinutes":0,"normalMinutes":0,"maxMinutes":0},"days":[input::item(a, "day")?.clone()]});
-            let m = model::parse_work_month(&p)?;
+            let m = model::parse_projection(&p)?;
             let day = m
-                .days
+                .days()
                 .first()
                 .ok_or_else(|| Error::value("a day is required"))?;
             Ok(json!(explain::explain_day(
